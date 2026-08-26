@@ -26,7 +26,8 @@ func main() {
 
 	conf, err := config.Load()
 	if err != nil {
-		log.Fatal("failed to load config", zap.Error(err))
+		log.Error("failed to load config", zap.Error(err))
+		conf = config.Default()
 	}
 
 	db, err := cache.OpenDatabase(ytmpCacheDir)

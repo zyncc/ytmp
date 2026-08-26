@@ -2,13 +2,16 @@ package cache
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/zyncc/ytmp/internal/models"
 )
 
 type Storer interface {
 	UpsertPlaylists(playlists []models.Playlist) error
-	FetchPlaylists() ([]Playlist, error)
+	FetchPlaylists(favoritesOnly bool) ([]Playlist, error)
+	MarkFavoritePlaylist(id string) error
+	FetchAllSongs(playlistID string) ([]Song, error)
 }
 
 type CacheRepository struct {
@@ -21,8 +24,70 @@ func NewCacheRepository(db *sql.DB) *CacheRepository {
 	}
 }
 
-func (c *CacheRepository) FetchPlaylists() ([]Playlist, error) {
-	rows, err := c.db.Query("SELECT id, title, url, thumbnail_url, created_at, updated_at FROM playlists")
+func (c *CacheRepository) FetchAllSongs(playlistID string) ([]Song, error) {
+	rows, err := c.db.Query("SELECT id, playlist_id, title, url, duration, channel, uploader, thumbnail_url, view_count, created_at, updated_at FROM songs WHERE playlist_id = ?", playlistID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var songs []Song
+	for rows.Next() {
+		var song Song
+		if err := rows.Scan(
+			&song.ID,
+			&song.PlaylistID,
+			&song.Title,
+			&song.URL,
+			&song.Duration,
+			&song.Channel,
+			&song.Uploader,
+			&song.ThumbnailURL,
+			&song.ViewCount,
+			&song.CreatedAt,
+			&song.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+
+		songs = append(songs, song)
+	}
+
+	return songs, nil
+}
+
+func (c *CacheRepository) MarkFavoritePlaylist(id string) error {
+	result, err := c.db.Exec("UPDATE playlists SET favorite = NOT favorite WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return fmt.Errorf("failed to find playlist with this id = %s", id)
+	}
+
+	return nil
+}
+
+func (c *CacheRepository) FetchPlaylists(favoritesOnly bool) ([]Playlist, error) {
+	var query string
+
+	if favoritesOnly {
+		query = "SELECT id, title, url, thumbnail_url, created_at, updated_at FROM playlists WHERE favorite = 1"
+	} else {
+		query = "SELECT id, title, url, thumbnail_url, created_at, updated_at FROM playlists"
+	}
+
+	rows, err := c.db.Query(query)
 	if err != nil {
 		return nil, err
 	}

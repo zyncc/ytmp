@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 
+	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
@@ -26,6 +27,11 @@ type playlistsLoadedMsg struct {
 	err       error
 }
 
+type songsLoadedMsg struct {
+	songs []cache.Song
+	err   error
+}
+
 type model struct {
 	log             *zap.Logger
 	config          *config.Config
@@ -46,8 +52,11 @@ type model struct {
 
 	q queue.Queue
 
-	volume    int
-	favorites bool
+	volume        int
+	favoritesOnly bool
+
+	keys KeyMap
+	help help.Model
 }
 
 func NewModel(log *zap.Logger, config *config.Config, db *sql.DB, cacheRepository *cache.CacheRepository) model {
@@ -84,8 +93,11 @@ func NewModel(log *zap.Logger, config *config.Config, db *sql.DB, cacheRepositor
 		playlistsTable: playlistsTable,
 
 		// config
-		volume:    config.Player.Volume,
-		favorites: config.General.ToggleFavorites,
+		volume:        config.Player.Volume,
+		favoritesOnly: config.General.ToggleFavorites,
+
+		keys: keys,
+		help: help.New(),
 	}
 }
 
@@ -93,7 +105,7 @@ func (m model) Init() tea.Cmd {
 	return tea.Batch(
 		m.spinner.Tick,
 		func() tea.Msg {
-			playlists, err := m.cacheRepository.FetchPlaylists()
+			playlists, err := m.cacheRepository.FetchPlaylists(m.config.General.ToggleFavorites)
 			return playlistsLoadedMsg{
 				playlists: playlists,
 				err:       err,

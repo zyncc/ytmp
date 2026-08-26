@@ -27,5 +27,25 @@ func FetchAllPlaylists() ([]models.Playlist, error) {
 	}
 
 	return playlists.Entries, nil
+}
 
+func FetchAllSongs(playlistURL string) ([]models.Song, error) {
+	cmd := exec.Command(
+		"yt-dlp",
+		"--flat-playlist",
+		"--dumb-single-json",
+		playlistURL,
+	)
+
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	var songs models.SongsData
+	if err := json.Unmarshal(output, &songs); err != nil {
+		return nil, err
+	}
+
+	return songs.Entries, nil
 }

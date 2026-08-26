@@ -7,6 +7,7 @@ import (
 	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
 	"github.com/zyncc/ytmp/internal/cache"
+	"github.com/zyncc/ytmp/internal/config"
 	"github.com/zyncc/ytmp/internal/models"
 	"github.com/zyncc/ytmp/youtube"
 	"go.uber.org/zap"
@@ -15,6 +16,17 @@ import (
 type UpdatePlaylistCache struct {
 	playlists []models.Playlist
 	err       error
+}
+
+type UpdateSongCache struct {
+	songs []models.Song
+	err   error
+}
+
+type RefreshPlaylistCache struct{}
+
+type FetchSongs struct {
+	playlistID string
 }
 
 func playlistsToRows(playlists []cache.Playlist) []table.Row {
@@ -28,15 +40,31 @@ func playlistsToRows(playlists []cache.Playlist) []table.Row {
 	return rows
 }
 
+func songsToRows(songs []cache.Song) []table.Row {
+	rows := make([]table.Row, len(songs))
+	for i, song := range songs {
+		rows[i] = table.Row{
+			strconv.Itoa(i + 1),
+			song.Title,
+			*song.Uploader,
+		}
+	}
+	return rows
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		titleWidth := msg.Width - 14
 		titleWidth = max(titleWidth, 20)
+
 		m.playlistsTable.SetColumns([]table.Column{
 			{Title: "#", Width: 4},
-			{Title: "Title", Width: titleWidth},
+			{Title: "Name", Width: titleWidth},
 		})
+
+		m.help.SetWidth(msg.Width)
+
 		m.playlistsTable.SetWidth(msg.Width - 4)
 		m.playlistsTable.SetHeight(msg.Height)
 		return m, nil
@@ -81,7 +109,38 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter":
 				m.screen = songsScreen
 				m.previousScreen = playlistScreen
-				return m, nil
+				playlistCursor := m.playlistsTable.Cursor()
+				selectedPlaylist := m.playlists[playlistCursor]
+
+				return m, func() tea.Msg {
+					return FetchSongs{
+						playlistID: selectedPlaylist.ID,
+					}
+				}
+			case "ctrl+f":
+				m.favoritesOnly = !m.favoritesOnly
+				m.config.General.ToggleFavorites = m.favoritesOnly
+
+				if err := config.Save(m.config); err != nil {
+					m.log.Error("failed to save config", zap.Error(err))
+					return m, nil
+				}
+
+				return m, func() tea.Msg {
+					return RefreshPlaylistCache{}
+				}
+			case "f":
+				selectedRowIndex := m.playlistsTable.Cursor()
+				selectedPlaylist := m.playlists[selectedRowIndex]
+
+				m.log.Info("favorite", zap.String("id", selectedPlaylist.ID))
+				if err := m.cacheRepository.MarkFavoritePlaylist(selectedPlaylist.ID); err != nil {
+					m.log.Error("failed to toggle favorite for playlist", zap.String("playlist_name", selectedPlaylist.Title), zap.Error(err))
+				}
+
+				return m, func() tea.Msg {
+					return RefreshPlaylistCache{}
+				}
 			}
 
 			var cmd tea.Cmd
@@ -106,6 +165,40 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.screen = m.previousScreen
 				m.previousScreen = queueScreen
 				return m, nil
+			}
+		}
+
+	case FetchSongs:
+		songs, err := m.cacheRepository.FetchAllSongs(msg.playlistID)
+		if err != nil {
+			return m, nil
+		}
+
+		if len(songs) == 0 {
+			return m, func() tea.Msg {
+				return songsLoadedMsg{
+					songs: nil,
+					err:   err,
+					playlistURL,
+				}
+			}
+		}
+
+		m.songs = songs
+		rows := songsToRows(songs)
+		m.songsTable.SetRows(rows)
+
+		return m, nil
+
+	case songsLoadedMsg:
+		if msg.err != nil || len(msg.songs) == 0 {
+			m.log.Warn("songs not found in cache, fetching songs using yt-dlp")
+			return m, func() tea.Msg {
+				songs, err := youtube.FetchAllSongs()
+				return UpdateSongCache{
+					songs: songs,
+					err:   err,
+				}
 			}
 		}
 
@@ -138,13 +231,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			log.Fatal("failed to insert playlists into cache", zap.Error(err))
 		}
 
-		playlists, err := m.cacheRepository.FetchPlaylists()
+		playlists, err := m.cacheRepository.FetchPlaylists(m.config.General.ToggleFavorites)
 		if err != nil {
 			log.Fatal("failed to fetch playlists from cache", zap.Error(err))
 		}
 
 		m.playlists = playlists
 		m.playlistsTable.SetRows(playlistsToRows(m.playlists))
+		return m, nil
+
+	case RefreshPlaylistCache:
+		playlists, err := m.cacheRepository.FetchPlaylists(m.favoritesOnly)
+		if err != nil {
+			log.Fatal("failed to fetch playlists", zap.Error(err))
+		}
+
+		m.playlists = playlists
+
+		rows := playlistsToRows(playlists)
+		m.playlistsTable.SetRows(rows)
 		return m, nil
 
 	default:
