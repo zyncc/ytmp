@@ -10,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/zyncc/ytmp/internal/cache"
 	"github.com/zyncc/ytmp/internal/config"
+	"github.com/zyncc/ytmp/internal/mpv"
 	"github.com/zyncc/ytmp/internal/queue"
 	"go.uber.org/zap"
 )
@@ -52,6 +53,10 @@ type Model struct {
 	playlists []cache.Playlist
 	songs     []cache.Song
 
+	previousSongURL string
+	currentSongURL  string
+	nextSongURL     string
+
 	selectedPlaylist cache.Playlist
 
 	q queue.Queue
@@ -61,10 +66,12 @@ type Model struct {
 
 	width  int
 	height int
+
+	mpvClient *mpv.Client
+	mpvEvents <-chan mpv.Event
 }
 
-// New creates and initializes a new UI Model.
-func New(log *zap.Logger, config *config.Config, db *sql.DB, cacheRepository cache.Storer) Model {
+func New(log *zap.Logger, config *config.Config, db *sql.DB, cacheRepository cache.Storer, mpvClient *mpv.Client, mpvEvents <-chan mpv.Event) Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color(config.Theme.Primary))
@@ -120,7 +127,7 @@ func New(log *zap.Logger, config *config.Config, db *sql.DB, cacheRepository cac
 		spinner:  s,
 		progress: prog,
 
-		currentTime: 20,
+		currentTime: 0,
 		duration:    100,
 		isPlaying:   false,
 
@@ -130,13 +137,26 @@ func New(log *zap.Logger, config *config.Config, db *sql.DB, cacheRepository cac
 
 		volume:        config.Player.Volume,
 		favoritesOnly: config.General.ToggleFavorites,
+
+		mpvClient: mpvClient,
+		mpvEvents: mpvEvents,
 	}
 }
 
-// Init initializes the model and fetches playlists from the cache repository.
+func waitForMPVEvent(events <-chan mpv.Event) tea.Cmd {
+	return func() tea.Msg {
+		ev, ok := <-events
+		if !ok {
+			return nil
+		}
+		return ev
+	}
+}
+
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.spinner.Tick,
+		waitForMPVEvent(m.mpvEvents),
 		func() tea.Msg {
 			playlists, err := m.cacheRepository.FetchPlaylists(m.config.General.ToggleFavorites)
 			return playlistsLoadedMsg{

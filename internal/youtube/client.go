@@ -8,7 +8,6 @@ import (
 	"github.com/zyncc/ytmp/internal/models"
 )
 
-// FetchAllPlaylists retrieves all playlists for the authenticated/configured YouTube user via yt-dlp.
 func FetchAllPlaylists() ([]models.Playlist, error) {
 	cmd := exec.Command(
 		"yt-dlp",
@@ -31,7 +30,6 @@ func FetchAllPlaylists() ([]models.Playlist, error) {
 	return playlists.Entries, nil
 }
 
-// FetchAllSongs retrieves all songs within a playlist by ID via yt-dlp.
 func FetchAllSongs(playlistID string) ([]models.Song, error) {
 	url := fmt.Sprintf("https://music.youtube.com/playlist?list=%s", playlistID)
 	cmd := exec.Command(
@@ -52,4 +50,20 @@ func FetchAllSongs(playlistID string) ([]models.Song, error) {
 	}
 
 	return songs.Entries, nil
+}
+
+func FetchSong(url string) (string, error) {
+	cmd := exec.Command(
+		"yt-dlp",
+		"-f", "ba",
+		"-g",
+		url,
+	)
+
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	return string(output), nil
 }

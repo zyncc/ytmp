@@ -71,7 +71,7 @@ func Default() *Config {
 			ToggleFavorites: false,
 		},
 		Player: PlayerConfig{
-			Volume: 80,
+			Volume: 100,
 		},
 		Theme: ThemeConfig{
 			Primary:   "4",

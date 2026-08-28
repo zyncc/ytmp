@@ -9,6 +9,16 @@ import (
 func (m Model) PlayerBarView() string {
 	var titleLine string
 	var percent float64
+	volumeIcon := "󰕾"
+
+	switch {
+	case m.volume == 0:
+		volumeIcon = " "
+	case m.volume < 50:
+		volumeIcon = " "
+	default:
+		volumeIcon = " "
+	}
 
 	if !m.isPlaying || m.q.IsEmpty() {
 		titleLine = lipgloss.NewStyle().
@@ -29,7 +39,7 @@ func (m Model) PlayerBarView() string {
 			Foreground(lipgloss.Color(m.config.Theme.Text)).
 			Render(song.Channel)
 
-		titleLine = fmt.Sprintf("%s %s • %s", icon, title, channel)
+		titleLine = fmt.Sprintf("%s %s • %s      %s %d", icon, title, channel, volumeIcon, m.volume)
 		if m.duration > 0 {
 			percent = float64(m.currentTime) / float64(m.duration)
 		}
