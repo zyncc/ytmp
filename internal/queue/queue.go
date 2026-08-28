@@ -3,23 +3,23 @@ package queue
 import (
 	"math/rand/v2"
 
-	"github.com/zyncc/ytmp/internal/models"
+	"github.com/zyncc/ytmp/internal/cache"
 )
 
 type Queue struct {
-	Songs  []models.Song
+	Songs  []cache.Song
 	Cursor int
 }
 
-func (q *Queue) Enqueue(song models.Song) {
+func (q *Queue) Enqueue(song cache.Song) {
 	q.Songs = append(q.Songs, song)
 }
 
-func (q *Queue) EnqueueAll(Songs []models.Song) {
+func (q *Queue) EnqueueAll(Songs []cache.Song) {
 	q.Songs = append(q.Songs, Songs...)
 }
 
-func (q *Queue) PlayNext(song models.Song) {
+func (q *Queue) PlayNext(song cache.Song) {
 	if q.IsEmpty() {
 		q.Enqueue(song)
 		return
@@ -27,7 +27,7 @@ func (q *Queue) PlayNext(song models.Song) {
 
 	index := q.Cursor + 1
 
-	q.Songs = append(q.Songs, models.Song{})
+	q.Songs = append(q.Songs, cache.Song{})
 	copy(q.Songs[index+1:], q.Songs[index:])
 	q.Songs[index] = song
 }
@@ -68,9 +68,9 @@ func (q *Queue) Previous() {
 	}
 }
 
-func (q *Queue) Current() models.Song {
+func (q *Queue) Current() cache.Song {
 	if q.IsEmpty() {
-		return models.Song{}
+		return cache.Song{}
 	}
 
 	return q.Songs[q.Cursor]

@@ -1,4 +1,4 @@
-package main
+package logger
 
 import (
 	"fmt"
@@ -9,7 +9,8 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-func NewLogger(environment string) *zap.Logger {
+// New initializes and returns a configured zap.Logger.
+func New(environment string) *zap.Logger {
 	var cfg zap.Config
 
 	configDir, err := os.UserConfigDir()
@@ -21,7 +22,7 @@ func NewLogger(environment string) *zap.Logger {
 	logDir := filepath.Join(configDir, "ytmp", "logs")
 	logFile := filepath.Join(logDir, "ytmp.log")
 
-	if err := os.MkdirAll(logDir, 0755); err != nil {
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create log directory: %v\n", err)
 		os.Exit(1)
 	}
@@ -45,7 +46,7 @@ func NewLogger(environment string) *zap.Logger {
 	cfg.OutputPaths = []string{logFile}
 	cfg.ErrorOutputPaths = []string{logFile}
 
-	logger, err := cfg.Build(
+	l, err := cfg.Build(
 		zap.AddCallerSkip(0),
 	)
 	if err != nil {
@@ -53,8 +54,8 @@ func NewLogger(environment string) *zap.Logger {
 		os.Exit(1)
 	}
 
-	zap.ReplaceGlobals(logger)
-	zap.RedirectStdLog(logger)
+	zap.ReplaceGlobals(l)
+	zap.RedirectStdLog(l)
 
-	return logger
+	return l
 }

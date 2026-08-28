@@ -11,6 +11,7 @@ type Storer interface {
 	UpsertPlaylists(playlists []models.Playlist) error
 	FetchPlaylists(favoritesOnly bool) ([]Playlist, error)
 	MarkFavoritePlaylist(id string) error
+	UpsertSongs(playlistID string, songs []models.Song) error
 	FetchAllSongs(playlistID string) ([]Song, error)
 }
 
@@ -24,8 +25,53 @@ func NewCacheRepository(db *sql.DB) *CacheRepository {
 	}
 }
 
+func (c *CacheRepository) UpsertSongs(playlistID string, songs []models.Song) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	const query = `
+		INSERT INTO songs (
+			id,
+			playlist_id,
+			title,
+			url,
+			duration,
+			channel,
+			thumbnail_url,
+			view_count
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id, playlist_id) DO UPDATE SET
+			title = excluded.title,
+			url = excluded.url,
+			thumbnail_url = excluded.thumbnail_url,
+			view_count = excluded.view_count,
+			updated_at = CURRENT_TIMESTAMP
+	`
+	for _, song := range songs {
+		if _, err := tx.Exec(
+			query,
+			song.ID,
+			playlistID,
+			song.Title,
+			song.URL,
+			song.Duration,
+			song.Channel,
+			song.Thumbnails[len(song.Thumbnails)-1].URL,
+			song.ViewCount,
+		); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
 func (c *CacheRepository) FetchAllSongs(playlistID string) ([]Song, error) {
-	rows, err := c.db.Query("SELECT id, playlist_id, title, url, duration, channel, uploader, thumbnail_url, view_count, created_at, updated_at FROM songs WHERE playlist_id = ?", playlistID)
+	rows, err := c.db.Query("SELECT id, playlist_id, title, url, duration, channel, thumbnail_url, view_count, created_at, updated_at FROM songs WHERE playlist_id = ?", playlistID)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +87,6 @@ func (c *CacheRepository) FetchAllSongs(playlistID string) ([]Song, error) {
 			&song.URL,
 			&song.Duration,
 			&song.Channel,
-			&song.Uploader,
 			&song.ThumbnailURL,
 			&song.ViewCount,
 			&song.CreatedAt,
@@ -61,7 +106,7 @@ func (c *CacheRepository) FetchAllSongs(playlistID string) ([]Song, error) {
 }
 
 func (c *CacheRepository) MarkFavoritePlaylist(id string) error {
-	result, err := c.db.Exec("UPDATE playlists SET favorite = NOT favorite WHERE id = ?", id)
+	result, err := c.db.Exec("UPDATE playlists SET favorite = NOT favorite, updated_at = CURRENT_TIMESTAMP WHERE id = ?", id)
 	if err != nil {
 		return err
 	}
@@ -82,7 +127,7 @@ func (c *CacheRepository) FetchPlaylists(favoritesOnly bool) ([]Playlist, error)
 	var query string
 
 	if favoritesOnly {
-		query = "SELECT id, title, url, thumbnail_url, created_at, updated_at FROM playlists WHERE favorite = 1"
+		query = "SELECT id, title, url, thumbnail_url, created_at, updated_at FROM playlists WHERE favorite = 1 ORDER BY updated_at ASC"
 	} else {
 		query = "SELECT id, title, url, thumbnail_url, created_at, updated_at FROM playlists"
 	}

@@ -74,13 +74,13 @@ func Default() *Config {
 			Volume: 80,
 		},
 		Theme: ThemeConfig{
-			Primary:   "#a3a6a7",
-			Secondary: "#9fa5a9",
-			Text:      "#cacccc",
-			Subtle:    "#565d60",
-			Border:    "#343d41",
-			Success:   "#d9dbdc",
-			Error:     "#de6145",
+			Primary:   "4",
+			Secondary: "6",
+			Text:      "7",
+			Subtle:    "8",
+			Border:    "0",
+			Success:   "2",
+			Error:     "1",
 		},
 	}
 }

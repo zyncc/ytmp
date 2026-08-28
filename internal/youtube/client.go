@@ -2,11 +2,13 @@ package youtube
 
 import (
 	"encoding/json"
+	"fmt"
 	"os/exec"
 
 	"github.com/zyncc/ytmp/internal/models"
 )
 
+// FetchAllPlaylists retrieves all playlists for the authenticated/configured YouTube user via yt-dlp.
 func FetchAllPlaylists() ([]models.Playlist, error) {
 	cmd := exec.Command(
 		"yt-dlp",
@@ -18,33 +20,35 @@ func FetchAllPlaylists() ([]models.Playlist, error) {
 
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to fetch playlists: %w", err)
 	}
 
 	var playlists models.PlaylistData
 	if err := json.Unmarshal(output, &playlists); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode playlists json: %w", err)
 	}
 
 	return playlists.Entries, nil
 }
 
-func FetchAllSongs(playlistURL string) ([]models.Song, error) {
+// FetchAllSongs retrieves all songs within a playlist by ID via yt-dlp.
+func FetchAllSongs(playlistID string) ([]models.Song, error) {
+	url := fmt.Sprintf("https://music.youtube.com/playlist?list=%s", playlistID)
 	cmd := exec.Command(
 		"yt-dlp",
 		"--flat-playlist",
-		"--dumb-single-json",
-		playlistURL,
+		"--dump-single-json",
+		url,
 	)
 
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("yt-dlp failed for %s: %w\n%s", url, err, output)
 	}
 
 	var songs models.SongsData
 	if err := json.Unmarshal(output, &songs); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode songs json: %w", err)
 	}
 
 	return songs.Entries, nil

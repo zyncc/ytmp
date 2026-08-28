@@ -7,11 +7,13 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/zyncc/ytmp/internal/cache"
 	"github.com/zyncc/ytmp/internal/config"
+	"github.com/zyncc/ytmp/internal/logger"
+	"github.com/zyncc/ytmp/internal/ui"
 	"go.uber.org/zap"
 )
 
 func main() {
-	log := NewLogger("production")
+	log := logger.New("production")
 
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
@@ -19,8 +21,7 @@ func main() {
 	}
 
 	ytmpCacheDir := filepath.Join(cacheDir, "ytmp")
-
-	if err := os.MkdirAll(ytmpCacheDir, 0755); err != nil {
+	if err := os.MkdirAll(ytmpCacheDir, 0o755); err != nil {
 		log.Fatal("failed to create cache directory", zap.Error(err))
 	}
 
@@ -45,7 +46,7 @@ func main() {
 	log.Info("ytmp running")
 
 	p := tea.NewProgram(
-		NewModel(log, conf, db, cacheRepository),
+		ui.New(log, conf, db, cacheRepository),
 	)
 	if _, err := p.Run(); err != nil {
 		log.Fatal("failed to start ytmp", zap.Error(err))

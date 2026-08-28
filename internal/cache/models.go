@@ -19,10 +19,9 @@ type Song struct {
 	Title        string
 	URL          string
 	Duration     int
-	Channel      *string
-	Uploader     *string
-	ThumbnailURL *string
-	ViewCount    *int
+	Channel      string
+	ThumbnailURL string
+	ViewCount    int
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

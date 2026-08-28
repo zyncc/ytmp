@@ -6,10 +6,11 @@ type SongsData struct {
 }
 
 type Song struct {
-	ID        string `json:"id"`
-	URL       string `json:"url"`
-	Title     string `json:"title"`
-	Duration  int    `json:"duration"`
-	Artist    string `json:"uploader"`
-	ViewCount int    `json:"view_count"`
+	ID         string      `json:"id"`
+	URL        string      `json:"url"`
+	Title      string      `json:"title"`
+	Duration   int         `json:"duration"`
+	Channel    string      `json:"channel"`
+	ViewCount  int         `json:"view_count"`
+	Thumbnails []Thumbnail `json:"thumbnails"`
 }
