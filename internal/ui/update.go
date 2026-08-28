@@ -199,6 +199,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.currentTime = 0
 				}
 				return m, nil
+
+			case "e":
+				selectedSongCursor := m.songsTable.Cursor()
+				selectedSong := m.songs[selectedSongCursor]
+				m.q.Enqueue(selectedSong)
+				rows := songsToRows(m.q.Songs)
+				m.queueTable.SetRows(rows)
+
+			case "a":
+				selectedSongCursor := m.songsTable.Cursor()
+				selectedSong := m.songs[selectedSongCursor]
+				m.q.PlayNext(selectedSong)
+				rows := songsToRows(m.q.Songs)
+				m.queueTable.SetRows(rows)
+
 			case "s":
 				if len(m.songs) == 0 {
 					return m, nil
@@ -208,12 +223,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.q.Shuffle()
 				rows := songsToRows(m.q.Songs)
 				m.queueTable.SetRows(rows)
-				if !m.q.IsEmpty() {
-					current := m.q.Current()
-					m.isPlaying = true
-					m.duration = current.Duration
-					m.currentTime = 0
-				}
+				// if !m.q.IsEmpty() {
+				// 	current := m.q.Current()
+				// 	m.isPlaying = true
+				// 	m.duration = current.Duration
+				// 	m.currentTime = 0
+				// }
 				return m, nil
 			case "esc":
 				m.screen = PlaylistScreen
@@ -244,6 +259,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter":
 				selectedSongCursor := m.queueTable.Cursor()
 				m.q.Cursor = selectedSongCursor
+
+			case "e":
+				selectedSongCursor := m.queueTable.Cursor()
+				selectedSong := m.q.Songs[selectedSongCursor]
+				m.q.Enqueue(selectedSong)
+				rows := songsToRows(m.q.Songs)
+				m.queueTable.SetRows(rows)
+
+			case "a":
+				selectedSongCursor := m.queueTable.Cursor()
+				selectedSong := m.q.Songs[selectedSongCursor]
+				m.q.PlayNext(selectedSong)
+				rows := songsToRows(m.q.Songs)
+				m.queueTable.SetRows(rows)
+
+				if m.queueTable.Cursor() != 0 {
+					m.queueTable.SetCursor(m.queueTable.Cursor() + 1)
+				}
 			}
 			var cmd tea.Cmd
 			m.queueTable, cmd = m.queueTable.Update(msg)
