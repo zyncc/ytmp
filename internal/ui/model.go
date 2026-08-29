@@ -1,11 +1,13 @@
 package ui
 
 import (
+	"context"
 	"database/sql"
 
 	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/table"
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/zyncc/ytmp/internal/cache"
@@ -21,6 +23,7 @@ const (
 	PlaylistScreen Screen = iota
 	SongsScreen
 	QueueScreen
+	KeybindsScreen
 )
 
 type playlistsLoadedMsg struct {
@@ -49,8 +52,12 @@ type Model struct {
 	songsTable     table.Model
 	queueTable     table.Model
 
+	keybindsViewport viewport.Model
+
 	playlists []cache.Playlist
 	songs     []cache.Song
+
+	fetchCancel context.CancelFunc
 
 	urlCache          map[string]string
 	currentPlayingURL string
@@ -138,6 +145,8 @@ func New(log *zap.Logger, config *config.Config, db *sql.DB, cacheRepository cac
 		playlistsTable: playlistsTable,
 		songsTable:     songsTable,
 		queueTable:     queueTable,
+
+		keybindsViewport: viewport.New(),
 
 		volume:                config.Player.Volume,
 		volumeIncrementAmount: config.Player.VolumeIncrementAmount,

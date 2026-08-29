@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"encoding/json"
 
 	"charm.land/bubbles/v2/table"
@@ -38,9 +39,16 @@ type StreamURLFetchedMsg struct {
 	AutoPlay  bool
 }
 
-func fetchStreamURLCmd(song cache.Song, autoPlay bool) tea.Cmd {
+func (m *Model) cancelInFlightFetch() {
+	if m.fetchCancel != nil {
+		m.fetchCancel()
+		m.fetchCancel = nil
+	}
+}
+
+func fetchStreamURLCmd(ctx context.Context, song cache.Song, autoPlay bool) tea.Cmd {
 	return func() tea.Msg {
-		streamURL, err := youtube.FetchSong(song.URL)
+		streamURL, err := youtube.FetchSong(ctx, song.URL)
 		return StreamURLFetchedMsg{
 			SongURL:   song.URL,
 			StreamURL: streamURL,
@@ -73,6 +81,11 @@ func (m *Model) playCurrent() tea.Cmd {
 		return nil
 	}
 
+	m.cancelInFlightFetch()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	m.fetchCancel = cancel
+
 	currentSong := m.q.Current()
 	m.isPlaying = true
 	m.isPaused = false
@@ -88,18 +101,18 @@ func (m *Model) playCurrent() tea.Cmd {
 			m.log.Error("failed to play song with mpv", zap.Error(err))
 		}
 	} else {
-		cmds = append(cmds, fetchStreamURLCmd(currentSong, true))
+		cmds = append(cmds, fetchStreamURLCmd(ctx, currentSong, true))
 	}
 
 	if nextSong, ok := m.q.PeekNext(); ok {
 		if _, ok := m.urlCache[nextSong.URL]; !ok {
-			cmds = append(cmds, fetchStreamURLCmd(nextSong, false))
+			cmds = append(cmds, fetchStreamURLCmd(ctx, nextSong, false))
 		}
 	}
 
 	if prevSong, ok := m.q.PeekPrevious(); ok {
 		if _, ok := m.urlCache[prevSong.URL]; !ok {
-			cmds = append(cmds, fetchStreamURLCmd(prevSong, false))
+			cmds = append(cmds, fetchStreamURLCmd(ctx, prevSong, false))
 		}
 	}
 
@@ -117,7 +130,6 @@ func (m *Model) updateTableDimensions() {
 		overhead      = 12 // border and padding overhead
 	)
 
-	// Responsive artist column: proportional to terminal width, bounded between 18 and 35
 	artistWidth := max(min(m.width/4, 35), 18)
 
 	playlistTitleWidth := max(m.width-overhead, 20)
@@ -159,6 +171,11 @@ func (m *Model) updateTableDimensions() {
 
 	queueTableHeight := max(m.height-playerBarHeight-3, 1)
 	m.queueTable.SetHeight(queueTableHeight)
+
+	keybindsHeight := max(m.height-playerBarHeight-3, 1)
+	m.keybindsViewport.SetWidth(m.width - 4)
+	m.keybindsViewport.SetHeight(keybindsHeight)
+	m.keybindsViewport.SetContent(m.buildKeybindsContent())
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -234,6 +251,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			return m, tea.Quit
 
+		case "?":
+			if m.screen == KeybindsScreen {
+				m.screen = m.previousScreen
+				m.previousScreen = KeybindsScreen
+				return m, nil
+			}
+			m.previousScreen = m.screen
+			m.screen = KeybindsScreen
+			m.updateTableDimensions()
+			return m, nil
+
 		// Volume control
 		case "-":
 			m.volume -= m.config.Player.VolumeIncrementAmount
@@ -243,7 +271,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.mpvClient.SetVolume(m.volume)
 			return m, nil
 
-		case "=":
+		case "=", "+":
 			m.volume += m.config.Player.VolumeIncrementAmount
 			if m.volume > 100 {
 				m.volume = 100
@@ -278,7 +306,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case ",":
-			if m.q.HasPrevious() {
+			if m.currentTime <= 10 {
+				return m, m.playCurrent()
+			} else if m.q.HasPrevious() {
 				m.q.Previous()
 				cmd := m.playCurrent()
 				return m, cmd
@@ -305,6 +335,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.screen = m.previousScreen
 				m.previousScreen = QueueScreen
 				m.updateTableDimensions()
+				return m, nil
+			case KeybindsScreen:
+				m.screen = m.previousScreen
+				m.previousScreen = KeybindsScreen
 				return m, nil
 			}
 		}
@@ -462,6 +496,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var cmd tea.Cmd
 			m.queueTable, cmd = m.queueTable.Update(msg)
 			return m, cmd
+
+		case KeybindsScreen:
+			switch key {
+			case "esc", "q", "?":
+				m.screen = m.previousScreen
+				m.previousScreen = KeybindsScreen
+				return m, nil
+			case "g", "home":
+				m.keybindsViewport.GotoTop()
+				return m, nil
+			case "G", "end":
+				m.keybindsViewport.GotoBottom()
+				return m, nil
+			}
+			var cmd tea.Cmd
+			m.keybindsViewport, cmd = m.keybindsViewport.Update(msg)
+			return m, cmd
 		}
 
 	case FetchSongs:
@@ -562,9 +613,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	default:
+		var cmds []tea.Cmd
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
+		cmds = append(cmds, cmd)
+
+		if m.screen == KeybindsScreen {
+			m.keybindsViewport, cmd = m.keybindsViewport.Update(msg)
+			cmds = append(cmds, cmd)
+		}
+		return m, tea.Batch(cmds...)
 	}
 
 	return m, nil
