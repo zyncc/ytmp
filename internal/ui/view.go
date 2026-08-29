@@ -17,6 +17,8 @@ func (m Model) View() tea.View {
 		content = m.SongsContent()
 	case QueueScreen:
 		content = m.QueueContent()
+	case KeybindsScreen:
+		content = m.KeybindsContent()
 	}
 
 	playerBar := m.PlayerBarView()

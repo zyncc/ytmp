@@ -133,20 +133,42 @@ go install github.com/zyncc/ytmp/cmd/ytmp@latest
 
 ## ⌨️ Keybindings
 
-### 🌐 Global Controls
+### 🎵 Playback & Audio
 
 | Key | Action |
 |:---|:---|
 | <kbd>Space</kbd> | Toggle Play / Pause |
-| <kbd>.</kbd> | Next Track |
-| <kbd>,</kbd> | Previous Track |
-| <kbd>r</kbd> | Toggle Repeat Mode |
-| <kbd>→</kbd> | Seek Forward 5 seconds |
-| <kbd>←</kbd> | Seek Backward 5 seconds |
-| <kbd>=</kbd> / <kbd>+</kbd> | Increase Volume |
-| <kbd>-</kbd> | Decrease Volume |
-| <kbd>q</kbd> | Toggle Queue Screen / Back |
-| <kbd>Ctrl</kbd> + <kbd>c</kbd> | Quit Application |
+| <kbd>.</kbd> | Next track |
+| <kbd>,</kbd> | Previous track / Restart track (if > 10s elapsed) |
+| <kbd>→</kbd> | Seek forward 5 seconds |
+| <kbd>←</kbd> | Seek backward 5 seconds |
+| <kbd>+</kbd> / <kbd>=</kbd> | Increase volume |
+| <kbd>-</kbd> | Decrease volume |
+| <kbd>r</kbd> | Toggle repeat mode |
+
+---
+
+### 🧭 Navigation & Scrolling
+
+| Key | Action |
+|:---|:---|
+| <kbd>↑</kbd> / <kbd>k</kbd> | Move cursor up |
+| <kbd>↓</kbd> / <kbd>j</kbd> | Move cursor down |
+| <kbd>g</kbd> / <kbd>Home</kbd> | Jump to top of list |
+| <kbd>G</kbd> / <kbd>End</kbd> | Jump to bottom of list |
+| <kbd>Ctrl</kbd> + <kbd>u</kbd> / <kbd>PgUp</kbd> | Scroll page up |
+| <kbd>Ctrl</kbd> + <kbd>d</kbd> / <kbd>PgDown</kbd> | Scroll page down |
+
+---
+
+### 🌐 General & Application
+
+| Key | Action |
+|:---|:---|
+| <kbd>q</kbd> | Toggle Queue screen / Back |
+| <kbd>?</kbd> | Toggle Keybinds help overlay |
+| <kbd>Esc</kbd> | Back / Return to previous view |
+| <kbd>Ctrl</kbd> + <kbd>c</kbd> | Quit application |
 
 ---
 
@@ -157,8 +179,6 @@ go install github.com/zyncc/ytmp/cmd/ytmp@latest
 | <kbd>Enter</kbd> | Open selected playlist and load songs |
 | <kbd>f</kbd> | Toggle Favorite status for selected playlist |
 | <kbd>Ctrl</kbd> + <kbd>f</kbd> | Toggle Filter (Show All / Favorites Only) |
-| <kbd>↑</kbd> / <kbd>k</kbd> | Move cursor up |
-| <kbd>↓</kbd> / <kbd>j</kbd> | Move cursor down |
 
 ---
 
@@ -180,7 +200,7 @@ go install github.com/zyncc/ytmp/cmd/ytmp@latest
 |:---|:---|
 | <kbd>Enter</kbd> | Jump to and play selected song |
 | <kbd>a</kbd> | Duplicate and add song to play next |
-| <kbd>e</kbd> | Duplicate and enqueue song at end |
+| <kbd>e</kbd> | Duplicate and enqueue song at end of queue |
 | <kbd>Esc</kbd> / <kbd>q</kbd> | Return to previous screen |
 
 ---

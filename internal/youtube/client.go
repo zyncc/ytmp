@@ -1,6 +1,7 @@
 package youtube
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -53,8 +54,9 @@ func FetchAllSongs(playlistID string) ([]models.Song, error) {
 	return songs.Entries, nil
 }
 
-func FetchSong(url string) (string, error) {
-	cmd := exec.Command(
+func FetchSong(ctx context.Context, url string) (string, error) {
+	cmd := exec.CommandContext(
+		ctx,
 		"yt-dlp",
 		"-f", "ba",
 		"-g",
