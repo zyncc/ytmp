@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"strings"
 
 	"github.com/zyncc/ytmp/internal/models"
 )
@@ -65,5 +66,5 @@ func FetchSong(url string) (string, error) {
 		return "", err
 	}
 
-	return string(output), nil
+	return strings.TrimSpace(string(output)), nil
 }

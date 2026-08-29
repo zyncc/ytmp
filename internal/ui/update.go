@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"encoding/json"
+
 	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -23,12 +25,85 @@ type FetchSongs struct {
 	playlistID string
 }
 
-type PlaySong struct {
-	song cache.Song
+type SongsFetchedMsg struct {
+	playlistID string
+	songs      []cache.Song
+	err        error
 }
 
-type PrefetchSong struct {
-	songURL string
+type StreamURLFetchedMsg struct {
+	SongURL   string
+	StreamURL string
+	Err       error
+	AutoPlay  bool
+}
+
+func fetchStreamURLCmd(song cache.Song, autoPlay bool) tea.Cmd {
+	return func() tea.Msg {
+		streamURL, err := youtube.FetchSong(song.URL)
+		return StreamURLFetchedMsg{
+			SongURL:   song.URL,
+			StreamURL: streamURL,
+			Err:       err,
+			AutoPlay:  autoPlay,
+		}
+	}
+}
+
+func fetchSongsFromYTDLPCmd(cacheRepo cache.Storer, playlistID string) tea.Cmd {
+	return func() tea.Msg {
+		ytSongs, err := youtube.FetchAllSongs(playlistID)
+		if err != nil {
+			return SongsFetchedMsg{playlistID: playlistID, err: err}
+		}
+		if err := cacheRepo.UpsertSongs(playlistID, ytSongs); err != nil {
+			return SongsFetchedMsg{playlistID: playlistID, err: err}
+		}
+		songs, err := cacheRepo.FetchAllSongs(playlistID)
+		return SongsFetchedMsg{
+			playlistID: playlistID,
+			songs:      songs,
+			err:        err,
+		}
+	}
+}
+
+func (m *Model) playCurrent() tea.Cmd {
+	if m.q.IsEmpty() {
+		return nil
+	}
+
+	currentSong := m.q.Current()
+	m.isPlaying = true
+	m.isPaused = false
+	m.duration = currentSong.Duration
+	m.currentTime = 0
+	m.currentPlayingURL = currentSong.URL
+	m.queueTable.SetCursor(m.q.Cursor)
+
+	var cmds []tea.Cmd
+
+	if streamURL, ok := m.urlCache[currentSong.URL]; ok && streamURL != "" {
+		if err := m.mpvClient.PlaySong(streamURL); err != nil {
+			m.log.Error("failed to play song with mpv", zap.Error(err))
+		}
+	} else {
+		cmds = append(cmds, fetchStreamURLCmd(currentSong, true))
+	}
+
+	if nextSong, ok := m.q.PeekNext(); ok {
+		if _, ok := m.urlCache[nextSong.URL]; !ok {
+			cmds = append(cmds, fetchStreamURLCmd(nextSong, false))
+		}
+	}
+
+	if prevSong, ok := m.q.PeekPrevious(); ok {
+		if _, ok := m.urlCache[prevSong.URL]; !ok {
+			cmds = append(cmds, fetchStreamURLCmd(prevSong, false))
+		}
+	}
+
+	return tea.Batch(cmds...)
 }
 
 func (m *Model) updateTableDimensions() {
@@ -93,53 +168,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, waitForMPVEvent(m.mpvEvents))
 
 		switch msg.Event {
+		case "property-change":
+			switch msg.Name {
+			case "time-pos":
+				var timePos float64
+				if err := json.Unmarshal(msg.Data, &timePos); err == nil {
+					m.currentTime = int(timePos)
+				}
+			case "pause":
+				var paused bool
+				if err := json.Unmarshal(msg.Data, &paused); err == nil {
+					m.isPaused = paused
+				}
+			case "duration":
+				var duration float64
+				if err := json.Unmarshal(msg.Data, &duration); err == nil && duration > 0 {
+					m.duration = int(duration)
+				}
+			}
 		case "end-file":
 			m.log.Info("song ended", zap.String("reason", msg.Reason))
 			if msg.Reason == "eof" {
-				if m.nextSongURL != "" {
-					if err := m.mpvClient.PlaySong(m.nextSongURL); err != nil {
-						m.log.Error("failed to play song with mpv", zap.Error(err))
-					}
-					m.previousSongURL = m.currentSongURL
-					m.currentSongURL = m.nextSongURL
-					m.nextSongURL = ""
-
+				if m.q.HasNext() {
 					m.q.Next()
-					if !m.q.IsEmpty() {
-						current := m.q.Current()
-						m.isPlaying = true
-						m.duration = current.Duration
-						m.currentTime = 0
-					}
-
-					if m.q.Cursor+1 < len(m.q.Songs) {
-						nextSong := m.q.Songs[m.q.Cursor+1]
-						cmds = append(cmds, func() tea.Msg {
-							return PrefetchSong{
-								songURL: nextSong.URL,
-							}
-						})
-					}
-				} else if m.q.Cursor+1 < len(m.q.Songs) {
-					m.q.Next()
-					current := m.q.Current()
-					m.isPlaying = true
-					m.duration = current.Duration
-					m.currentTime = 0
-
-					cmds = append(cmds, func() tea.Msg {
-						return PlaySong{
-							song: current,
-						}
-					})
-					if m.q.Cursor+1 < len(m.q.Songs) {
-						nextSong := m.q.Songs[m.q.Cursor+1]
-						cmds = append(cmds, func() tea.Msg {
-							return PrefetchSong{
-								songURL: nextSong.URL,
-							}
-						})
-					}
+					cmds = append(cmds, m.playCurrent())
 				} else {
 					m.isPlaying = false
 					m.currentTime = 0
@@ -148,6 +200,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		return m, tea.Batch(cmds...)
+
+	case StreamURLFetchedMsg:
+		if msg.Err != nil {
+			m.log.Error("failed to fetch stream url", zap.String("song_url", msg.SongURL), zap.Error(msg.Err))
+			return m, nil
+		}
+
+		m.urlCache[msg.SongURL] = msg.StreamURL
+
+		if msg.AutoPlay && m.currentPlayingURL == msg.SongURL {
+			if err := m.mpvClient.PlaySong(msg.StreamURL); err != nil {
+				m.log.Error("failed to play song with mpv", zap.Error(err))
+			}
+		}
+
+		return m, nil
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -165,7 +233,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Volume control
 		case "-":
-			m.volume -= 10
+			m.volume -= m.config.Player.VolumeIncrementAmount
 			if m.volume < 0 {
 				m.volume = 0
 			}
@@ -173,7 +241,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "=":
-			m.volume += 10
+			m.volume += m.config.Player.VolumeIncrementAmount
 			if m.volume > 100 {
 				m.volume = 100
 			}
@@ -181,11 +249,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "right":
-			m.mpvClient.Seek(5)
+			if err := m.mpvClient.Seek(5); err != nil {
+				m.log.Error("failed to seek forward", zap.Error(err))
+			}
 			return m, nil
 
 		case "left":
-			m.mpvClient.Seek(-5)
+			if err := m.mpvClient.Seek(-5); err != nil {
+				m.log.Error("failed to seek backwards", zap.Error(err))
+			}
+			return m, nil
+
+		case "space":
+			if err := m.mpvClient.TogglePause(); err != nil {
+				m.log.Error("failed to toggle pause", zap.Error(err))
+			}
+			return m, nil
+
+		case ".":
+			if m.q.HasNext() {
+				m.q.Next()
+				cmd := m.playCurrent()
+				return m, cmd
+			}
+			return m, nil
+
+		case ",":
+			if m.q.HasPrevious() {
+				m.q.Previous()
+				cmd := m.playCurrent()
+				return m, cmd
+			}
 			return m, nil
 
 		case "q":
@@ -271,33 +365,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				selectedSongCursor := m.songsTable.Cursor()
-				selectedSong := m.songs[selectedSongCursor]
 				m.q.Clear()
 				m.q.EnqueueAll(m.songs[selectedSongCursor:])
 				rows := songsToRows(m.q.Songs)
 				m.queueTable.SetRows(rows)
-				if !m.q.IsEmpty() {
-					current := m.q.Current()
-					m.isPlaying = true
-					m.duration = current.Duration
-					m.currentTime = 0
-				}
-
-				var cmds []tea.Cmd
-				cmds = append(cmds, func() tea.Msg {
-					return PlaySong{
-						song: selectedSong,
-					}
-				})
-				if m.q.Cursor+1 < len(m.q.Songs) {
-					nextSong := m.q.Songs[m.q.Cursor+1]
-					cmds = append(cmds, func() tea.Msg {
-						return PrefetchSong{
-							songURL: nextSong.URL,
-						}
-					})
-				}
-				return m, tea.Batch(cmds...)
+				cmd := m.playCurrent()
+				return m, cmd
 
 			case "e":
 				selectedSongCursor := m.songsTable.Cursor()
@@ -322,30 +395,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.q.Shuffle()
 				rows := songsToRows(m.q.Songs)
 				m.queueTable.SetRows(rows)
-
-				var cmds []tea.Cmd
-				if !m.q.IsEmpty() {
-					current := m.q.Current()
-					m.isPlaying = true
-					m.duration = current.Duration
-					m.currentTime = 0
-
-					cmds = append(cmds, func() tea.Msg {
-						return PlaySong{
-							song: current,
-						}
-					})
-					if m.q.Cursor+1 < len(m.q.Songs) {
-						nextSong := m.q.Songs[m.q.Cursor+1]
-						cmds = append(cmds, func() tea.Msg {
-							return PrefetchSong{
-								songURL: nextSong.URL,
-							}
-						})
-					}
-				}
-
-				return m, tea.Batch(cmds...)
+				cmd := m.playCurrent()
+				return m, cmd
 
 			case "esc":
 				m.screen = PlaylistScreen
@@ -375,30 +426,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 
 			case "enter":
+				if m.q.IsEmpty() {
+					return m, nil
+				}
 				selectedSongCursor := m.queueTable.Cursor()
 				m.q.Cursor = selectedSongCursor
-				if !m.q.IsEmpty() {
-					current := m.q.Current()
-					m.isPlaying = true
-					m.duration = current.Duration
-					m.currentTime = 0
-
-					var cmds []tea.Cmd
-					cmds = append(cmds, func() tea.Msg {
-						return PlaySong{
-							song: current,
-						}
-					})
-					if m.q.Cursor+1 < len(m.q.Songs) {
-						nextSong := m.q.Songs[m.q.Cursor+1]
-						cmds = append(cmds, func() tea.Msg {
-							return PrefetchSong{
-								songURL: nextSong.URL,
-							}
-						})
-					}
-					return m, tea.Batch(cmds...)
-				}
+				cmd := m.playCurrent()
+				return m, cmd
 
 			case "e":
 				selectedSongCursor := m.queueTable.Cursor()
@@ -423,25 +457,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-	case PlaySong:
-		songURL, err := youtube.FetchSong(msg.song.URL)
-		if err != nil {
-			m.log.Error("failed to fetch song url using yt-dlp", zap.Error(err))
-			return m, nil
-		}
-		m.currentSongURL = songURL
-		m.mpvClient.PlaySong(songURL)
-		return m, nil
-
-	case PrefetchSong:
-		m.log.Info("prefetching song", zap.String("url", msg.songURL))
-		songURL, err := youtube.FetchSong(msg.songURL)
-		if err != nil {
-			m.log.Error("failed to fetch song url using yt-dlp", zap.Error(err))
-			return m, nil
-		}
-		m.nextSongURL = songURL
-
 	case FetchSongs:
 		m.log.Info("FetchSongs received",
 			zap.String("playlist_id", msg.playlistID),
@@ -461,33 +476,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if len(songs) == 0 {
 			m.log.Warn("no songs found in cache, fetching from yt-dlp")
-
-			ytSongs, err := youtube.FetchAllSongs(msg.playlistID)
-			if err != nil {
-				m.log.Fatal("failed to fetch songs using yt-dlp",
-					zap.Error(err),
-				)
-			}
-
-			m.log.Info("songs fetched from yt-dlp",
-				zap.Int("count", len(ytSongs)),
-			)
-
-			if err := m.cacheRepository.UpsertSongs(msg.playlistID, ytSongs); err != nil {
-				m.log.Fatal("failed to update cache with songs",
-					zap.Error(err),
-				)
-			}
-
-			return m, func() tea.Msg {
-				return FetchSongs{
-					playlistID: msg.playlistID,
-				}
-			}
+			m.songs = nil
+			return m, fetchSongsFromYTDLPCmd(m.cacheRepository, msg.playlistID)
 		}
 
 		m.songs = songs
 		m.songsTable.SetRows(songsToRows(songs))
+
+		return m, nil
+
+	case SongsFetchedMsg:
+		if msg.err != nil {
+			m.log.Error("failed to fetch songs using yt-dlp",
+				zap.Error(msg.err),
+			)
+			return m, nil
+		}
+
+		m.log.Info("songs fetched from yt-dlp",
+			zap.Int("count", len(msg.songs)),
+		)
+
+		if msg.playlistID == m.selectedPlaylist.ID {
+			m.songs = msg.songs
+			m.songsTable.SetRows(songsToRows(msg.songs))
+		}
 
 		return m, nil
 

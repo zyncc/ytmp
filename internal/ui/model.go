@@ -15,7 +15,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// Screen represents the active UI screen.
 type Screen int
 
 const (
@@ -29,7 +28,6 @@ type playlistsLoadedMsg struct {
 	err       error
 }
 
-// Model represents the main Bubble Tea application state.
 type Model struct {
 	log             *zap.Logger
 	config          *config.Config
@@ -45,6 +43,7 @@ type Model struct {
 	currentTime int
 	duration    int
 	isPlaying   bool
+	isPaused    bool
 
 	playlistsTable table.Model
 	songsTable     table.Model
@@ -53,16 +52,16 @@ type Model struct {
 	playlists []cache.Playlist
 	songs     []cache.Song
 
-	previousSongURL string
-	currentSongURL  string
-	nextSongURL     string
+	urlCache          map[string]string
+	currentPlayingURL string
 
 	selectedPlaylist cache.Playlist
 
 	q queue.Queue
 
-	volume        int
-	favoritesOnly bool
+	volume                int
+	volumeIncrementAmount int
+	favoritesOnly         bool
 
 	width  int
 	height int
@@ -130,13 +129,17 @@ func New(log *zap.Logger, config *config.Config, db *sql.DB, cacheRepository cac
 		currentTime: 0,
 		duration:    100,
 		isPlaying:   false,
+		isPaused:    false,
 
 		playlistsTable: playlistsTable,
 		songsTable:     songsTable,
 		queueTable:     queueTable,
 
-		volume:        config.Player.Volume,
-		favoritesOnly: config.General.ToggleFavorites,
+		volume:                config.Player.Volume,
+		volumeIncrementAmount: config.Player.VolumeIncrementAmount,
+		favoritesOnly:         config.General.ToggleFavorites,
+
+		urlCache: make(map[string]string),
 
 		mpvClient: mpvClient,
 		mpvEvents: mpvEvents,

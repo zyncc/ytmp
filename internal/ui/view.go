@@ -20,7 +20,16 @@ func (m Model) View() tea.View {
 	}
 
 	playerBar := m.PlayerBarView()
-	view := fmt.Sprintf("%s\n\n%s", content, playerBar)
+
+	var view string
+	if m.height > 0 {
+		playerBarHeight := lipgloss.Height(playerBar)
+		contentHeight := max(0, m.height-playerBarHeight)
+		placedContent := lipgloss.PlaceVertical(contentHeight, lipgloss.Top, content)
+		view = lipgloss.JoinVertical(lipgloss.Left, placedContent, playerBar)
+	} else {
+		view = fmt.Sprintf("%s\n\n%s", content, playerBar)
+	}
 
 	v := tea.NewView(view)
 	v.AltScreen = true
@@ -50,7 +59,7 @@ func (m Model) SongsContent() string {
 
 func (m Model) QueueContent() string {
 	if len(m.q.Songs) == 0 {
-		return lipgloss.NewStyle().Foreground(lipgloss.Color(m.config.Theme.Subtle)).Render("Queue is empty...")
+		return lipgloss.NewStyle().Foreground(lipgloss.Color(m.config.Theme.Text)).Render("Queue is empty...")
 	}
 
 	title := lipgloss.NewStyle().Foreground(lipgloss.Color(m.config.Theme.Text)).Bold(true).Render("Queue")

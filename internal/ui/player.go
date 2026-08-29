@@ -2,14 +2,16 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func (m Model) PlayerBarView() string {
-	var titleLine string
+	var leftSide string
 	var percent float64
-	volumeIcon := "󰕾"
+	volumeIcon := " "
 
 	switch {
 	case m.volume == 0:
@@ -21,16 +23,20 @@ func (m Model) PlayerBarView() string {
 	}
 
 	if !m.isPlaying || m.q.IsEmpty() {
-		titleLine = lipgloss.NewStyle().
+		leftSide = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(m.config.Theme.Subtle)).
 			Render("Nothing playing")
 		percent = 0.0
 	} else {
 		song := m.q.Current()
+		iconSymbol := "▶"
+		if m.isPaused {
+			iconSymbol = "⏸"
+		}
 		icon := lipgloss.NewStyle().
 			Foreground(lipgloss.Color(m.config.Theme.Secondary)).
 			Bold(true).
-			Render("▶")
+			Render(iconSymbol)
 		title := lipgloss.NewStyle().
 			Foreground(lipgloss.Color(m.config.Theme.Text)).
 			Bold(true).
@@ -39,11 +45,32 @@ func (m Model) PlayerBarView() string {
 			Foreground(lipgloss.Color(m.config.Theme.Text)).
 			Render(song.Channel)
 
-		titleLine = fmt.Sprintf("%s %s • %s      %s %d", icon, title, channel, volumeIcon, m.volume)
+		leftSide = fmt.Sprintf("%s %s • %s", icon, title, channel)
 		if m.duration > 0 {
 			percent = float64(m.currentTime) / float64(m.duration)
 		}
 	}
+
+	volumeStr := fmt.Sprintf("%s %d", volumeIcon, m.volume)
+	volumeStyled := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(m.config.Theme.Text)).
+		Render(volumeStr)
+
+	targetWidth := m.width - 4
+	if targetWidth <= 0 {
+		targetWidth = 80
+	}
+
+	rightWidth := lipgloss.Width(volumeStyled)
+	maxLeftWidth := max(0, targetWidth-rightWidth-2)
+	if lipgloss.Width(leftSide) > maxLeftWidth {
+		leftSide = ansi.Truncate(leftSide, maxLeftWidth, "…")
+	}
+
+	leftWidth := lipgloss.Width(leftSide)
+	spaceCount := max(targetWidth-leftWidth-rightWidth, 1)
+	spaces := strings.Repeat(" ", spaceCount)
+	titleLine := fmt.Sprintf("%s%s%s", leftSide, spaces, volumeStyled)
 
 	timeStr := fmt.Sprintf("%s / %s", FormatDuration(m.currentTime), FormatDuration(m.duration))
 	timeStyled := lipgloss.NewStyle().

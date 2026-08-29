@@ -56,6 +56,28 @@ func (q *Queue) Shuffle() {
 	q.Cursor = 0
 }
 
+func (q *Queue) HasNext() bool {
+	return q.Cursor < len(q.Songs)-1
+}
+
+func (q *Queue) PeekNext() (cache.Song, bool) {
+	if q.HasNext() {
+		return q.Songs[q.Cursor+1], true
+	}
+	return cache.Song{}, false
+}
+
+func (q *Queue) HasPrevious() bool {
+	return q.Cursor > 0
+}
+
+func (q *Queue) PeekPrevious() (cache.Song, bool) {
+	if q.HasPrevious() {
+		return q.Songs[q.Cursor-1], true
+	}
+	return cache.Song{}, false
+}
+
 func (q *Queue) Next() {
 	if q.Cursor < len(q.Songs)-1 {
 		q.Cursor++

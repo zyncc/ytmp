@@ -20,7 +20,8 @@ type GeneralConfig struct {
 }
 
 type PlayerConfig struct {
-	Volume int `toml:"volume"`
+	Volume                int `toml:"volume"`
+	VolumeIncrementAmount int `toml:"volume_increment_amount"`
 }
 
 type ThemeConfig struct {
@@ -71,7 +72,8 @@ func Default() *Config {
 			ToggleFavorites: false,
 		},
 		Player: PlayerConfig{
-			Volume: 100,
+			Volume:                100,
+			VolumeIncrementAmount: 5,
 		},
 		Theme: ThemeConfig{
 			Primary:   "4",

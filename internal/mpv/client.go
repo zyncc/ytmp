@@ -15,8 +15,11 @@ type Client struct {
 }
 
 type Event struct {
-	Event  string `json:"event"`
-	Reason string `json:"reason,omitempty"`
+	Event  string          `json:"event"`
+	Reason string          `json:"reason,omitempty"`
+	Name   string          `json:"name,omitempty"`
+	Data   json.RawMessage `json:"data,omitempty"`
+	ID     int             `json:"id,omitempty"`
 }
 
 func Connect(socketPath string) (*Client, error) {
@@ -103,6 +106,10 @@ func (c *Client) SetVolume(volume int) error {
 	}
 
 	return nil
+}
+
+func (c *Client) ObserveProperty(id int, name string) error {
+	return c.Command("observe_property", id, name)
 }
 
 func (c *Client) ToggleMute() error {
