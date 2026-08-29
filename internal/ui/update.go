@@ -216,6 +216,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.isPlaying = false
 					m.currentTime = 0
 				}
+			} else if msg.Reason == "error" {
+				if m.q.HasNext() {
+					m.q.Next()
+					cmds = append(cmds, m.playCurrent())
+				} else {
+					m.isPlaying = false
+					m.currentTime = 0
+				}
 			}
 		}
 
@@ -224,6 +232,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case StreamURLFetchedMsg:
 		if msg.Err != nil {
 			m.log.Error("failed to fetch stream url", zap.String("song_url", msg.SongURL), zap.Error(msg.Err))
+			if msg.AutoPlay && m.currentPlayingURL == msg.SongURL {
+				if m.q.HasNext() {
+					m.q.Next()
+					return m, m.playCurrent()
+				}
+				m.isPlaying = false
+				m.currentTime = 0
+			}
 			return m, nil
 		}
 
