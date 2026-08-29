@@ -51,17 +51,27 @@ func (m Model) PlayerBarView() string {
 		}
 	}
 
+	var rightSide string
 	volumeStr := fmt.Sprintf("%s %d", volumeIcon, m.volume)
 	volumeStyled := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(m.config.Theme.Text)).
 		Render(volumeStr)
+
+	if m.repeatMode {
+		repeatStyled := lipgloss.NewStyle().
+			Foreground(lipgloss.Color(m.config.Theme.Text)).
+			Render("󰑖 ")
+		rightSide = fmt.Sprintf("%s  %s", repeatStyled, volumeStyled)
+	} else {
+		rightSide = volumeStyled
+	}
 
 	targetWidth := m.width - 4
 	if targetWidth <= 0 {
 		targetWidth = 80
 	}
 
-	rightWidth := lipgloss.Width(volumeStyled)
+	rightWidth := lipgloss.Width(rightSide)
 	maxLeftWidth := max(0, targetWidth-rightWidth-2)
 	if lipgloss.Width(leftSide) > maxLeftWidth {
 		leftSide = ansi.Truncate(leftSide, maxLeftWidth, "…")
@@ -70,7 +80,7 @@ func (m Model) PlayerBarView() string {
 	leftWidth := lipgloss.Width(leftSide)
 	spaceCount := max(targetWidth-leftWidth-rightWidth, 1)
 	spaces := strings.Repeat(" ", spaceCount)
-	titleLine := fmt.Sprintf("%s%s%s", leftSide, spaces, volumeStyled)
+	titleLine := fmt.Sprintf("%s%s%s", leftSide, spaces, rightSide)
 
 	timeStr := fmt.Sprintf("%s / %s", FormatDuration(m.currentTime), FormatDuration(m.duration))
 	timeStyled := lipgloss.NewStyle().

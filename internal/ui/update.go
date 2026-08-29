@@ -189,7 +189,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "end-file":
 			m.log.Info("song ended", zap.String("reason", msg.Reason))
 			if msg.Reason == "eof" {
-				if m.q.HasNext() {
+				// repeat mode on
+				if m.repeatMode {
+					cmds = append(cmds, m.playCurrent())
+				} else if m.q.HasNext() {
 					m.q.Next()
 					cmds = append(cmds, m.playCurrent())
 				} else {
@@ -280,6 +283,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmd := m.playCurrent()
 				return m, cmd
 			}
+			return m, nil
+
+		case "r":
+			m.repeatMode = !m.repeatMode
 			return m, nil
 
 		case "q":

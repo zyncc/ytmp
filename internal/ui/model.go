@@ -59,6 +59,8 @@ type Model struct {
 
 	q queue.Queue
 
+	repeatMode bool
+
 	volume                int
 	volumeIncrementAmount int
 	favoritesOnly         bool
@@ -130,6 +132,8 @@ func New(log *zap.Logger, config *config.Config, db *sql.DB, cacheRepository cac
 		duration:    100,
 		isPlaying:   false,
 		isPaused:    false,
+
+		repeatMode: false,
 
 		playlistsTable: playlistsTable,
 		songsTable:     songsTable,
