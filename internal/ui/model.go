@@ -47,6 +47,7 @@ type Model struct {
 	duration    int
 	isPlaying   bool
 	isPaused    bool
+	isMuted     bool
 
 	playlistsTable table.Model
 	songsTable     table.Model

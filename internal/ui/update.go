@@ -295,6 +295,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.mpvClient.SetVolume(m.volume)
 			return m, nil
 
+		case "m":
+			m.mpvClient.ToggleMute()
+			m.isMuted = !m.isMuted
+			return m, nil
+
 		case "right":
 			if err := m.mpvClient.Seek(5); err != nil {
 				m.log.Error("failed to seek forward", zap.Error(err))
@@ -322,12 +327,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case ",":
-			if m.currentTime <= 10 {
-				return m, m.playCurrent()
-			} else if m.q.HasPrevious() {
+			if m.currentTime <= 3 {
 				m.q.Previous()
 				cmd := m.playCurrent()
 				return m, cmd
+			} else if m.q.HasPrevious() {
+				return m, m.playCurrent()
 			}
 			return m, nil
 
