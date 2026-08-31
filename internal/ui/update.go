@@ -461,11 +461,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "?":
 			if m.screen == KeybindsScreen {
-				m.screen = m.previousScreen
-				m.previousScreen = KeybindsScreen
+				m.screen = m.keybindsReturn
+				m.updateTableDimensions()
 				return m, nil
 			}
-			m.previousScreen = m.screen
+			// Help is an overlay. Keep previousScreen intact so, for example,
+			// Queue can still return to Songs after help has been dismissed.
+			m.keybindsReturn = m.screen
 			m.screen = KeybindsScreen
 			m.updateTableDimensions()
 			return m, nil
@@ -576,8 +578,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.updateTableDimensions()
 				return m, nil
 			case KeybindsScreen:
-				m.screen = m.previousScreen
-				m.previousScreen = KeybindsScreen
+				m.screen = m.keybindsReturn
+				m.updateTableDimensions()
 				return m, nil
 			}
 		}
@@ -852,8 +854,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case KeybindsScreen:
 			switch key {
 			case "esc", "q", "?":
-				m.screen = m.previousScreen
-				m.previousScreen = KeybindsScreen
+				m.screen = m.keybindsReturn
+				m.updateTableDimensions()
 				return m, nil
 			case "g", "home":
 				m.keybindsViewport.GotoTop()
