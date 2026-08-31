@@ -40,6 +40,7 @@ type Model struct {
 
 	screen         Screen
 	previousScreen Screen
+	keybindsReturn Screen
 
 	spinner  spinner.Model
 	progress progress.Model
@@ -142,6 +143,7 @@ func New(log *zap.Logger, config *config.Config, db *sql.DB, cacheRepository cac
 
 		screen:         PlaylistScreen,
 		previousScreen: PlaylistScreen,
+		keybindsReturn: PlaylistScreen,
 
 		spinner:  s,
 		progress: prog,
