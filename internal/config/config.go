@@ -20,7 +20,7 @@ type GeneralConfig struct {
 }
 
 type PlayerConfig struct {
-	Volume                int `toml:"volume"`
+	Volume                int `toml:"default_volume"`
 	VolumeIncrementAmount int `toml:"volume_increment_amount"`
 }
 
