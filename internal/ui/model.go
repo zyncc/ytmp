@@ -12,6 +12,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/zyncc/ytmp/internal/cache"
 	"github.com/zyncc/ytmp/internal/config"
+	"github.com/zyncc/ytmp/internal/mpris"
 	"github.com/zyncc/ytmp/internal/mpv"
 	"github.com/zyncc/ytmp/internal/queue"
 	"go.uber.org/zap"
@@ -47,6 +48,7 @@ type Model struct {
 	duration    int
 	isPlaying   bool
 	isPaused    bool
+	isMuted     bool
 
 	playlistsTable table.Model
 	songsTable     table.Model
@@ -77,9 +79,11 @@ type Model struct {
 
 	mpvClient *mpv.Client
 	mpvEvents <-chan mpv.Event
+
+	mprisServer *mpris.Server
 }
 
-func New(log *zap.Logger, config *config.Config, db *sql.DB, cacheRepository cache.Storer, mpvClient *mpv.Client, mpvEvents <-chan mpv.Event) Model {
+func New(log *zap.Logger, config *config.Config, db *sql.DB, cacheRepository cache.Storer, mpvClient *mpv.Client, mpvEvents <-chan mpv.Event, mprisServer *mpris.Server) Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color(config.Theme.Primary))
@@ -123,6 +127,13 @@ func New(log *zap.Logger, config *config.Config, db *sql.DB, cacheRepository cac
 	songsTable.SetStyles(styles)
 	queueTable.SetStyles(styles)
 
+	if mprisServer != nil {
+		mprisServer.UpdateVolume(config.Player.Volume)
+		mprisServer.UpdateRepeatMode(false)
+		mprisServer.UpdatePlaybackStatus(false, false)
+		mprisServer.UpdateCanGo(false, false)
+	}
+
 	return Model{
 		log:             log,
 		config:          config,
@@ -156,6 +167,8 @@ func New(log *zap.Logger, config *config.Config, db *sql.DB, cacheRepository cac
 
 		mpvClient: mpvClient,
 		mpvEvents: mpvEvents,
+
+		mprisServer: mprisServer,
 	}
 }
 

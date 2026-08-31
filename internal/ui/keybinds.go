@@ -73,6 +73,7 @@ func GetKeyCategories() []KeyCategory {
 			Title: "Queue Screen",
 			Keybinds: []Keybind{
 				{Key: "Enter", Description: "Jump to & play selected song"},
+				{Key: "d", Description: "Remove selected song from queue"},
 				{Key: "a", Description: "Duplicate to play next"},
 				{Key: "e", Description: "Duplicate to queue end"},
 				{Key: "Esc / q", Description: "Return to previous screen"},

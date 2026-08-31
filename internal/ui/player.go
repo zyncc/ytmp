@@ -11,15 +11,15 @@ import (
 func (m Model) PlayerBarView() string {
 	var leftSide string
 	var percent float64
-	volumeIcon := " "
+	volumeIcon := ""
 
 	switch {
-	case m.volume == 0:
-		volumeIcon = " "
+	case m.isMuted || m.volume == 0:
+		volumeIcon = ""
 	case m.volume < 50:
-		volumeIcon = " "
+		volumeIcon = ""
 	default:
-		volumeIcon = " "
+		volumeIcon = ""
 	}
 
 	if !m.isPlaying || m.q.IsEmpty() {

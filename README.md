@@ -43,6 +43,8 @@
   Mark favorite playlists with a single keypress and toggle between viewing all playlists or only your starred favorites.
 - **🎛️ Headless MPV IPC Engine**  
   Direct socket-based IPC communication with `mpv` allows smooth volume adjustments, real-time scrubbing/seeking, and event listening.
+- **🛰️ Full MPRIS 2.2 & playerctl Integration**  
+  Seamlessly control playback, scrub tracks, adjust volume, and view metadata through media keys, status bars (Waybar, Polybar), desktop widgets, or `playerctl`.
 - **🎨 Configurable & Minimal TUI**  
   Clean aesthetic with customizable ANSI themes, dynamic progress bars, duration indicators, and automatic terminal resizing.
 
@@ -83,25 +85,57 @@ Before running **ytmp**, ensure the following tools are installed on your system
 
 ## 🔐 yt-dlp Configuration (Authentication)
 
-To allow `yt-dlp` to fetch your personalized YouTube and YouTube Music playlists without login blocks, you must configure browser cookies.
+To allow `yt-dlp` (and **ytmp**) to fetch your personalized YouTube and YouTube Music playlists without login blocks or bot detection issues, you must configure authentication using browser cookies.
 
 Create or edit the configuration file at:
 ```bash
-~/.config/yt-dlp/config
+mkdir -p ~/.config/yt-dlp
+nano ~/.config/yt-dlp/config
 ```
 
-Add your browser cookie extraction configuration:
+Choose one of the two authentication methods below:
+
+### Option 1: Exported `cookies.txt` File (Recommended)
+
+This is the most reliable method and avoids browser database locking or keyring decryption issues:
+
+1. Install a browser extension that exports cookies in Netscape format (e.g., [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbngbenkjcffliehddfacjne) for Chrome/Chromium or Firefox).
+2. Log in to [YouTube](https://www.youtube.com) and [YouTube Music](https://music.youtube.com).
+3. Export your cookies and save the file to `~/.config/yt-dlp/cookies.txt`.
+4. Update `~/.config/yt-dlp/config` to use the cookies file:
 
 ```conf
---cookies-from-browser chrome+gnomekeyring:~/.config/google-chrome
+--cookies ~/.config/yt-dlp/cookies.txt
 ```
 
+> [!IMPORTANT]
+> Keep your `cookies.txt` file secure and private, as it contains active session credentials.
+
+---
+
+### Option 2: Direct Browser Extraction
+
+Alternatively, `yt-dlp` can attempt to automatically extract cookies directly from your installed browser:
+
+```conf
+--cookies-from-browser chrome
+```
+
+**Supported browsers**:
+- **Chrome**: `--cookies-from-browser chrome`
+- **Firefox**: `--cookies-from-browser firefox`
+- **Brave**: `--cookies-from-browser brave`
+- **Chromium**: `--cookies-from-browser chromium`
+- **Edge**: `--cookies-from-browser edge`
+
 > [!TIP]
-> If you are using a different browser or operating system, adjust the `--cookies-from-browser` flag accordingly:
-> - **Brave**: `--cookies-from-browser brave`
-> - **Firefox**: `--cookies-from-browser firefox`
-> - **Chromium**: `--cookies-from-browser chromium`
-> - **Edge**: `--cookies-from-browser edge`
+> **Linux & Keyring Note**:  
+> On Linux, Chromium-based browsers (Chrome, Brave, Chromium, Edge) encrypt stored cookies using the system keyring. It may be necessary to specify your keyring (e.g., `+gnomekeyring` or `+kwallet5`/`+kwallet6`) and profile path:
+> ```conf
+> --cookies-from-browser chrome+gnomekeyring:~/.config/google-chrome
+> # Or for Brave:
+> --cookies-from-browser brave+gnomekeyring:~/.config/BraveSoftware/Brave-Browser
+> ```
 
 ---
 
@@ -199,6 +233,7 @@ go install github.com/zyncc/ytmp/cmd/ytmp@latest
 | Key | Action |
 |:---|:---|
 | <kbd>Enter</kbd> | Jump to and play selected song |
+| <kbd>d</kbd> | Remove selected song from queue |
 | <kbd>a</kbd> | Duplicate and add song to play next |
 | <kbd>e</kbd> | Duplicate and enqueue song at end of queue |
 | <kbd>Esc</kbd> / <kbd>q</kbd> | Return to previous screen |
