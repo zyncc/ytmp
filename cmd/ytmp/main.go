@@ -8,6 +8,7 @@ import (
 	"github.com/zyncc/ytmp/internal/cache"
 	"github.com/zyncc/ytmp/internal/config"
 	"github.com/zyncc/ytmp/internal/logger"
+	"github.com/zyncc/ytmp/internal/mpris"
 	"github.com/zyncc/ytmp/internal/mpv"
 	"github.com/zyncc/ytmp/internal/ui"
 	"go.uber.org/zap"
@@ -66,11 +67,25 @@ func main() {
 		}
 	}()
 
+	mprisServer, err := mpris.New(log)
+	if err != nil {
+		log.Warn("failed to initialize MPRIS server", zap.Error(err))
+	} else {
+		defer mprisServer.Close()
+	}
+
 	log.Info("ytmp running")
 
 	p := tea.NewProgram(
-		ui.New(log, conf, db, cacheRepository, mpvClient, mpvEvents),
+		ui.New(log, conf, db, cacheRepository, mpvClient, mpvEvents, mprisServer),
 	)
+
+	if mprisServer != nil {
+		mprisServer.SetSender(func(msg any) {
+			p.Send(msg)
+		})
+	}
+
 	if _, err := p.Run(); err != nil {
 		log.Fatal("failed to start ytmp", zap.Error(err))
 	}

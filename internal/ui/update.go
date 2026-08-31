@@ -10,6 +10,7 @@ import (
 	"github.com/zyncc/ytmp/internal/cache"
 	"github.com/zyncc/ytmp/internal/config"
 	"github.com/zyncc/ytmp/internal/models"
+	"github.com/zyncc/ytmp/internal/mpris"
 	"github.com/zyncc/ytmp/internal/mpv"
 	"github.com/zyncc/ytmp/internal/youtube"
 	"go.uber.org/zap"
@@ -93,6 +94,14 @@ func (m *Model) playCurrent() tea.Cmd {
 	m.currentTime = 0
 	m.currentPlayingURL = currentSong.URL
 	m.queueTable.SetCursor(m.q.Cursor)
+
+	if m.mprisServer != nil {
+		m.mprisServer.UpdateSong(currentSong, m.selectedPlaylist.Title)
+		m.mprisServer.UpdatePlaybackStatus(true, false)
+		m.mprisServer.UpdatePosition(0)
+		m.mprisServer.UpdateDuration(currentSong.Duration)
+		m.mprisServer.UpdateCanGo(m.q.HasNext(), m.q.HasPrevious())
+	}
 
 	var cmds []tea.Cmd
 
@@ -191,16 +200,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				var timePos float64
 				if err := json.Unmarshal(msg.Data, &timePos); err == nil {
 					m.currentTime = int(timePos)
+					if m.mprisServer != nil {
+						m.mprisServer.UpdatePosition(m.currentTime)
+					}
 				}
 			case "pause":
 				var paused bool
 				if err := json.Unmarshal(msg.Data, &paused); err == nil {
 					m.isPaused = paused
+					if m.mprisServer != nil {
+						m.mprisServer.UpdatePlaybackStatus(m.isPlaying, m.isPaused)
+					}
 				}
 			case "duration":
 				var duration float64
 				if err := json.Unmarshal(msg.Data, &duration); err == nil && duration > 0 {
 					m.duration = int(duration)
+					if m.mprisServer != nil {
+						m.mprisServer.UpdateDuration(m.duration)
+					}
 				}
 			}
 		case "end-file":
@@ -215,6 +233,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					m.isPlaying = false
 					m.currentTime = 0
+					if m.mprisServer != nil {
+						m.mprisServer.UpdatePlaybackStatus(false, false)
+						m.mprisServer.UpdatePosition(0)
+						m.mprisServer.ClearMetadata()
+						m.mprisServer.UpdateCanGo(false, m.q.HasPrevious())
+					}
 				}
 			} else if msg.Reason == "error" {
 				if m.q.HasNext() {
@@ -223,6 +247,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					m.isPlaying = false
 					m.currentTime = 0
+					if m.mprisServer != nil {
+						m.mprisServer.UpdatePlaybackStatus(false, false)
+						m.mprisServer.UpdatePosition(0)
+						m.mprisServer.ClearMetadata()
+						m.mprisServer.UpdateCanGo(false, m.q.HasPrevious())
+					}
 				}
 			}
 		}
@@ -239,6 +269,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.isPlaying = false
 				m.currentTime = 0
+				if m.mprisServer != nil {
+					m.mprisServer.UpdatePlaybackStatus(false, false)
+					m.mprisServer.UpdatePosition(0)
+					m.mprisServer.ClearMetadata()
+				}
 			}
 			return m, nil
 		}
@@ -251,6 +286,163 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		return m, nil
+
+	case mpris.MsgPlayPause:
+		if !m.isPlaying && !m.q.IsEmpty() {
+			return m, m.playCurrent()
+		}
+		if err := m.mpvClient.TogglePause(); err != nil {
+			m.log.Error("failed to toggle pause via MPRIS", zap.Error(err))
+		}
+		return m, nil
+
+	case mpris.MsgPlay:
+		if !m.isPlaying && !m.q.IsEmpty() {
+			return m, m.playCurrent()
+		}
+		if m.isPlaying && m.isPaused {
+			if err := m.mpvClient.Command("set_property", "pause", false); err != nil {
+				m.log.Error("failed to resume playback via MPRIS", zap.Error(err))
+			}
+		}
+		return m, nil
+
+	case mpris.MsgPause:
+		if m.isPlaying && !m.isPaused {
+			if err := m.mpvClient.Command("set_property", "pause", true); err != nil {
+				m.log.Error("failed to pause playback via MPRIS", zap.Error(err))
+			}
+		}
+		return m, nil
+
+	case mpris.MsgStop:
+		if m.isPlaying {
+			m.isPlaying = false
+			m.currentTime = 0
+			if err := m.mpvClient.Command("stop"); err != nil {
+				m.log.Error("failed to stop playback via MPRIS", zap.Error(err))
+			}
+			if m.mprisServer != nil {
+				m.mprisServer.UpdatePlaybackStatus(false, false)
+				m.mprisServer.UpdatePosition(0)
+				m.mprisServer.ClearMetadata()
+				m.mprisServer.UpdateCanGo(m.q.HasNext(), m.q.HasPrevious())
+			}
+		}
+		return m, nil
+
+	case mpris.MsgNext:
+		if m.q.HasNext() {
+			m.q.Next()
+			return m, m.playCurrent()
+		}
+		return m, nil
+
+	case mpris.MsgPrevious:
+		if m.currentTime <= 3 && m.q.HasPrevious() {
+			m.q.Previous()
+			return m, m.playCurrent()
+		} else if m.isPlaying {
+			if err := m.mpvClient.Command("seek", 0, "absolute"); err != nil {
+				m.log.Error("failed to seek to start via MPRIS", zap.Error(err))
+			}
+			m.currentTime = 0
+			if m.mprisServer != nil {
+				m.mprisServer.UpdatePosition(0)
+				m.mprisServer.EmitSeeked(0)
+			}
+			return m, nil
+		}
+		return m, nil
+
+	case mpris.MsgSeek:
+		if err := m.mpvClient.Seek(msg.OffsetSeconds); err != nil {
+			m.log.Error("failed to seek via MPRIS", zap.Error(err))
+		}
+		newTime := m.currentTime + msg.OffsetSeconds
+		if newTime < 0 {
+			newTime = 0
+		}
+		if m.duration > 0 && newTime > m.duration {
+			newTime = m.duration
+		}
+		m.currentTime = newTime
+		if m.mprisServer != nil {
+			m.mprisServer.UpdatePosition(m.currentTime)
+			m.mprisServer.EmitSeeked(m.currentTime)
+		}
+		return m, nil
+
+	case mpris.MsgSetPosition:
+		pos := msg.PositionSeconds
+		if pos < 0 {
+			pos = 0
+		}
+		if m.duration > 0 && pos > m.duration {
+			pos = m.duration
+		}
+		if err := m.mpvClient.Command("seek", pos, "absolute"); err != nil {
+			m.log.Error("failed to set position via MPRIS", zap.Error(err))
+		}
+		m.currentTime = pos
+		if m.mprisServer != nil {
+			m.mprisServer.UpdatePosition(m.currentTime)
+			m.mprisServer.EmitSeeked(m.currentTime)
+		}
+		return m, nil
+
+	case mpris.MsgSetVolume:
+		m.volume = msg.Volume
+		if err := m.mpvClient.SetVolume(m.volume); err != nil {
+			m.log.Error("failed to set volume via MPRIS", zap.Error(err))
+		}
+		if m.mprisServer != nil {
+			m.mprisServer.UpdateVolume(m.volume)
+		}
+		return m, nil
+
+	case mpris.MsgSetLoopStatus:
+		m.repeatMode = (msg.LoopStatus == "Track" || msg.LoopStatus == "Playlist")
+		if m.mprisServer != nil {
+			m.mprisServer.UpdateRepeatMode(m.repeatMode)
+		}
+		return m, nil
+
+	case mpris.MsgSetShuffle:
+		if msg.Shuffle && !m.q.IsEmpty() {
+			m.q.Shuffle()
+			rows := songsToRows(m.q.Songs)
+			m.queueTable.SetRows(rows)
+			if m.mprisServer != nil {
+				m.mprisServer.UpdateShuffle(true)
+			}
+			return m, m.playCurrent()
+		} else if !msg.Shuffle {
+			if m.mprisServer != nil {
+				m.mprisServer.UpdateShuffle(false)
+			}
+		}
+		return m, nil
+
+	case mpris.MsgOpenURI:
+		if msg.URI != "" {
+			song := cache.Song{
+				ID:    msg.URI,
+				Title: msg.URI,
+				URL:   msg.URI,
+			}
+			m.q.Enqueue(song)
+			rows := songsToRows(m.q.Songs)
+			m.queueTable.SetRows(rows)
+			if !m.isPlaying {
+				m.q.Cursor = len(m.q.Songs) - 1
+				return m, m.playCurrent()
+			}
+			if m.mprisServer != nil {
+				m.mprisServer.UpdateCanGo(m.q.HasNext(), m.q.HasPrevious() || m.isPlaying)
+			}
+		}
 		return m, nil
 
 	case tea.WindowSizeMsg:
@@ -285,6 +477,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.volume = 0
 			}
 			m.mpvClient.SetVolume(m.volume)
+			if m.mprisServer != nil {
+				m.mprisServer.UpdateVolume(m.volume)
+			}
 			return m, nil
 
 		case "=", "+":
@@ -293,6 +488,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.volume = 100
 			}
 			m.mpvClient.SetVolume(m.volume)
+			if m.mprisServer != nil {
+				m.mprisServer.UpdateVolume(m.volume)
+			}
 			return m, nil
 
 		case "m":
@@ -304,15 +502,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if err := m.mpvClient.Seek(5); err != nil {
 				m.log.Error("failed to seek forward", zap.Error(err))
 			}
+			if m.mprisServer != nil {
+				m.mprisServer.EmitSeeked(m.currentTime + 5)
+			}
 			return m, nil
 
 		case "left":
 			if err := m.mpvClient.Seek(-5); err != nil {
 				m.log.Error("failed to seek backwards", zap.Error(err))
 			}
+			if m.mprisServer != nil {
+				m.mprisServer.EmitSeeked(max(0, m.currentTime-5))
+			}
 			return m, nil
 
 		case "space":
+			if !m.isPlaying && !m.q.IsEmpty() {
+				return m, m.playCurrent()
+			}
 			if err := m.mpvClient.TogglePause(); err != nil {
 				m.log.Error("failed to toggle pause", zap.Error(err))
 			}
@@ -327,17 +534,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case ",":
-			if m.currentTime <= 3 {
+			if m.currentTime <= 3 && m.q.HasPrevious() {
 				m.q.Previous()
 				cmd := m.playCurrent()
 				return m, cmd
-			} else if m.q.HasPrevious() {
-				return m, m.playCurrent()
+			} else if m.isPlaying {
+				if err := m.mpvClient.Command("seek", 0, "absolute"); err != nil {
+					m.log.Error("failed to seek backwards", zap.Error(err))
+				}
+				m.currentTime = 0
+				if m.mprisServer != nil {
+					m.mprisServer.UpdatePosition(0)
+					m.mprisServer.EmitSeeked(0)
+				}
+				return m, nil
 			}
 			return m, nil
 
 		case "r":
 			m.repeatMode = !m.repeatMode
+			if m.mprisServer != nil {
+				m.mprisServer.UpdateRepeatMode(m.repeatMode)
+			}
 			return m, nil
 
 		case "q":
@@ -431,22 +649,55 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.q.EnqueueAll(m.songs[selectedSongCursor:])
 				rows := songsToRows(m.q.Songs)
 				m.queueTable.SetRows(rows)
+				if m.mprisServer != nil {
+					m.mprisServer.UpdateShuffle(false)
+				}
 				cmd := m.playCurrent()
+				m.screen = QueueScreen
+				m.previousScreen = SongsScreen
 				return m, cmd
 
 			case "e":
+				if len(m.songs) == 0 {
+					return m, nil
+				}
 				selectedSongCursor := m.songsTable.Cursor()
+				if selectedSongCursor < 0 || selectedSongCursor >= len(m.songs) {
+					return m, nil
+				}
 				selectedSong := m.songs[selectedSongCursor]
 				m.q.Enqueue(selectedSong)
 				rows := songsToRows(m.q.Songs)
 				m.queueTable.SetRows(rows)
+				if m.mprisServer != nil {
+					m.mprisServer.UpdateCanGo(m.q.HasNext(), m.q.HasPrevious() || m.isPlaying)
+				}
+				if nextSong, ok := m.q.PeekNext(); ok {
+					if _, ok := m.urlCache[nextSong.URL]; !ok {
+						return m, fetchStreamURLCmd(context.Background(), nextSong, false)
+					}
+				}
+				return m, nil
 
 			case "a":
+				if len(m.songs) == 0 {
+					return m, nil
+				}
 				selectedSongCursor := m.songsTable.Cursor()
+				if selectedSongCursor < 0 || selectedSongCursor >= len(m.songs) {
+					return m, nil
+				}
 				selectedSong := m.songs[selectedSongCursor]
 				m.q.PlayNext(selectedSong)
 				rows := songsToRows(m.q.Songs)
 				m.queueTable.SetRows(rows)
+				if m.mprisServer != nil {
+					m.mprisServer.UpdateCanGo(m.q.HasNext(), m.q.HasPrevious() || m.isPlaying)
+				}
+				if _, ok := m.urlCache[selectedSong.URL]; !ok {
+					return m, fetchStreamURLCmd(context.Background(), selectedSong, false)
+				}
+				return m, nil
 
 			case "s":
 				if len(m.songs) == 0 {
@@ -457,7 +708,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.q.Shuffle()
 				rows := songsToRows(m.q.Songs)
 				m.queueTable.SetRows(rows)
+				if m.mprisServer != nil {
+					m.mprisServer.UpdateShuffle(true)
+				}
 				cmd := m.playCurrent()
+				m.screen = QueueScreen
+				m.previousScreen = SongsScreen
 				return m, cmd
 
 			case "esc":
@@ -496,23 +752,98 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmd := m.playCurrent()
 				return m, cmd
 
-			case "e":
-				selectedSongCursor := m.queueTable.Cursor()
-				selectedSong := m.q.Songs[selectedSongCursor]
-				m.q.Enqueue(selectedSong)
-				rows := songsToRows(m.q.Songs)
-				m.queueTable.SetRows(rows)
-
 			case "a":
+				if m.q.IsEmpty() {
+					return m, nil
+				}
 				selectedSongCursor := m.queueTable.Cursor()
+				if selectedSongCursor < 0 || selectedSongCursor >= len(m.q.Songs) {
+					return m, nil
+				}
 				selectedSong := m.q.Songs[selectedSongCursor]
 				m.q.PlayNext(selectedSong)
 				rows := songsToRows(m.q.Songs)
 				m.queueTable.SetRows(rows)
-
-				if m.queueTable.Cursor() != 0 {
-					m.queueTable.SetCursor(m.queueTable.Cursor() + 1)
+				if m.mprisServer != nil {
+					m.mprisServer.UpdateCanGo(m.q.HasNext(), m.q.HasPrevious() || m.isPlaying)
 				}
+				if _, ok := m.urlCache[selectedSong.URL]; !ok {
+					return m, fetchStreamURLCmd(context.Background(), selectedSong, false)
+				}
+				return m, nil
+
+			case "e":
+				if m.q.IsEmpty() {
+					return m, nil
+				}
+				selectedSongCursor := m.queueTable.Cursor()
+				if selectedSongCursor < 0 || selectedSongCursor >= len(m.q.Songs) {
+					return m, nil
+				}
+				selectedSong := m.q.Songs[selectedSongCursor]
+				m.q.Enqueue(selectedSong)
+				rows := songsToRows(m.q.Songs)
+				m.queueTable.SetRows(rows)
+				if m.mprisServer != nil {
+					m.mprisServer.UpdateCanGo(m.q.HasNext(), m.q.HasPrevious() || m.isPlaying)
+				}
+				if nextSong, ok := m.q.PeekNext(); ok {
+					if _, ok := m.urlCache[nextSong.URL]; !ok {
+						return m, fetchStreamURLCmd(context.Background(), nextSong, false)
+					}
+				}
+				return m, nil
+
+			case "d":
+				if m.q.IsEmpty() {
+					return m, nil
+				}
+				selectedSongCursor := m.queueTable.Cursor()
+				if selectedSongCursor < 0 || selectedSongCursor >= len(m.q.Songs) {
+					return m, nil
+				}
+
+				wasPlayingCurrent := (selectedSongCursor == m.q.Cursor)
+				m.q.Remove(selectedSongCursor)
+
+				rows := songsToRows(m.q.Songs)
+				m.queueTable.SetRows(rows)
+
+				if selectedSongCursor >= len(rows) {
+					selectedSongCursor = len(rows) - 1
+				}
+				if selectedSongCursor < 0 {
+					selectedSongCursor = 0
+				}
+				m.queueTable.SetCursor(selectedSongCursor)
+
+				if m.q.IsEmpty() {
+					m.isPlaying = false
+					m.currentTime = 0
+					_ = m.mpvClient.Command("stop")
+					if m.mprisServer != nil {
+						m.mprisServer.UpdatePlaybackStatus(false, false)
+						m.mprisServer.UpdatePosition(0)
+						m.mprisServer.ClearMetadata()
+						m.mprisServer.UpdateCanGo(false, false)
+					}
+					return m, nil
+				}
+
+				if m.mprisServer != nil {
+					m.mprisServer.UpdateCanGo(m.q.HasNext(), m.q.HasPrevious() || m.isPlaying)
+				}
+
+				if wasPlayingCurrent && m.isPlaying {
+					return m, m.playCurrent()
+				}
+
+				if nextSong, ok := m.q.PeekNext(); ok {
+					if _, ok := m.urlCache[nextSong.URL]; !ok {
+						return m, fetchStreamURLCmd(context.Background(), nextSong, false)
+					}
+				}
+				return m, nil
 			}
 			var cmd tea.Cmd
 			m.queueTable, cmd = m.queueTable.Update(msg)

@@ -13,6 +13,7 @@ import (
 func FetchAllPlaylists() ([]models.Playlist, error) {
 	cmd := exec.Command(
 		"yt-dlp",
+		"-4",
 		"--flat-playlist",
 		"--extractor-args", "youtubetab:skip=authcheck",
 		"--dump-single-json",
@@ -36,6 +37,7 @@ func FetchAllSongs(playlistID string) ([]models.Song, error) {
 	url := fmt.Sprintf("https://music.youtube.com/playlist?list=%s", playlistID)
 	cmd := exec.Command(
 		"yt-dlp",
+		"-4",
 		"--flat-playlist",
 		"--dump-single-json",
 		url,
@@ -58,6 +60,7 @@ func FetchSong(ctx context.Context, url string) (string, error) {
 	cmd := exec.CommandContext(
 		ctx,
 		"yt-dlp",
+		"-4",
 		"-f", "ba",
 		"-g",
 		url,

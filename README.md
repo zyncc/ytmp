@@ -43,6 +43,8 @@
   Mark favorite playlists with a single keypress and toggle between viewing all playlists or only your starred favorites.
 - **🎛️ Headless MPV IPC Engine**  
   Direct socket-based IPC communication with `mpv` allows smooth volume adjustments, real-time scrubbing/seeking, and event listening.
+- **🛰️ Full MPRIS 2.2 & playerctl Integration**  
+  Seamlessly control playback, scrub tracks, adjust volume, and view metadata through media keys, status bars (Waybar, Polybar), desktop widgets, or `playerctl`.
 - **🎨 Configurable & Minimal TUI**  
   Clean aesthetic with customizable ANSI themes, dynamic progress bars, duration indicators, and automatic terminal resizing.
 
@@ -199,9 +201,42 @@ go install github.com/zyncc/ytmp/cmd/ytmp@latest
 | Key | Action |
 |:---|:---|
 | <kbd>Enter</kbd> | Jump to and play selected song |
+| <kbd>d</kbd> | Remove selected song from queue |
 | <kbd>a</kbd> | Duplicate and add song to play next |
 | <kbd>e</kbd> | Duplicate and enqueue song at end of queue |
 | <kbd>Esc</kbd> / <kbd>q</kbd> | Return to previous screen |
+
+---
+
+## 🛰️ MPRIS & playerctl Integration
+
+`ytmp` exports standard **MPRIS v2.2** D-Bus interfaces under `org.mpris.MediaPlayer2.ytmp`. This allows complete external control using `playerctl`, media keys, and desktop notifications/widgets.
+
+### Common `playerctl` Commands
+
+```bash
+# Playback control
+playerctl -p ytmp play-pause
+playerctl -p ytmp play
+playerctl -p ytmp pause
+playerctl -p ytmp stop
+playerctl -p ytmp next
+playerctl -p ytmp previous
+
+# Seek and position
+playerctl -p ytmp position 30      # Jump to 30s
+playerctl -p ytmp position 10+     # Seek forward 10s
+playerctl -p ytmp position 10-     # Seek backward 10s
+
+# Volume & Loop control
+playerctl -p ytmp volume 0.8       # Set volume to 80%
+playerctl -p ytmp loop Track       # Enable single-track repeat
+playerctl -p ytmp loop None        # Disable repeat
+playerctl -p ytmp shuffle On       # Shuffle queue
+
+# Metadata extraction
+playerctl -p ytmp metadata --format "{{ artist }} - {{ title }} ({{ duration(position) }} / {{ duration(mpris:length) }})"
+```
 
 ---
 
