@@ -28,6 +28,9 @@
 
 **ytmp** is a high-performance terminal music player designed to bring your YouTube and YouTube Music playlists directly into your command line. Built with [Charm's Bubble Tea v2](https://github.com/charmbracelet/bubbletea) for a responsive TUI, [mpv](https://mpv.io) for robust audio streaming, and [yt-dlp](https://github.com/yt-dlp/yt-dlp) for metadata extraction, **ytmp** delivers a distraction-free and lightweight listening experience.
 
+> [!NOTE]
+> ytmp currently supports Linux. macOS and Windows support are planned for a future release.
+
 ---
 
 ## ✨ Features
@@ -43,7 +46,7 @@
   Mark favorite playlists with a single keypress and toggle between viewing all playlists or only your starred favorites.
 - **🎛️ Headless MPV IPC Engine**  
   Direct socket-based IPC communication with `mpv` allows smooth volume adjustments, real-time scrubbing/seeking, and event listening.
-- **🛰️ Full MPRIS 2.2 & playerctl Integration**  
+- **🛰️ Full MPRIS 2.2 & playerctl Integration (Linux)**  
   Seamlessly control playback, scrub tracks, adjust volume, and view metadata through media keys, status bars (Waybar, Polybar), desktop widgets, or `playerctl`.
 - **🎨 Configurable & Minimal TUI**  
   Clean aesthetic with customizable ANSI themes, dynamic progress bars, duration indicators, and automatic terminal resizing.
@@ -62,8 +65,6 @@ Before running **ytmp**, ensure the following tools are installed on your system
    # Debian / Ubuntu
    sudo apt install mpv
 
-   # macOS (Homebrew)
-   brew install mpv
    ```
 
 2. **[yt-dlp](https://github.com/yt-dlp/yt-dlp)** — YouTube metadata and audio stream extractor.
@@ -74,8 +75,6 @@ Before running **ytmp**, ensure the following tools are installed on your system
    # Debian / Ubuntu
    sudo apt install yt-dlp
 
-   # macOS (Homebrew)
-   brew install yt-dlp
 
    # Or via pip / pipx
    pipx install yt-dlp
