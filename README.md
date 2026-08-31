@@ -85,25 +85,57 @@ Before running **ytmp**, ensure the following tools are installed on your system
 
 ## 🔐 yt-dlp Configuration (Authentication)
 
-To allow `yt-dlp` to fetch your personalized YouTube and YouTube Music playlists without login blocks, you must configure browser cookies.
+To allow `yt-dlp` (and **ytmp**) to fetch your personalized YouTube and YouTube Music playlists without login blocks or bot detection issues, you must configure authentication using browser cookies.
 
 Create or edit the configuration file at:
 ```bash
-~/.config/yt-dlp/config
+mkdir -p ~/.config/yt-dlp
+nano ~/.config/yt-dlp/config
 ```
 
-Add your browser cookie extraction configuration:
+Choose one of the two authentication methods below:
+
+### Option 1: Exported `cookies.txt` File (Recommended)
+
+This is the most reliable method and avoids browser database locking or keyring decryption issues:
+
+1. Install a browser extension that exports cookies in Netscape format (e.g., [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbngbenkjcffliehddfacjne) for Chrome/Chromium or Firefox).
+2. Log in to [YouTube](https://www.youtube.com) and [YouTube Music](https://music.youtube.com).
+3. Export your cookies and save the file to `~/.config/yt-dlp/cookies.txt`.
+4. Update `~/.config/yt-dlp/config` to use the cookies file:
 
 ```conf
---cookies-from-browser chrome+gnomekeyring:~/.config/google-chrome
+--cookies ~/.config/yt-dlp/cookies.txt
 ```
 
+> [!IMPORTANT]
+> Keep your `cookies.txt` file secure and private, as it contains active session credentials.
+
+---
+
+### Option 2: Direct Browser Extraction
+
+Alternatively, `yt-dlp` can attempt to automatically extract cookies directly from your installed browser:
+
+```conf
+--cookies-from-browser chrome
+```
+
+**Supported browsers**:
+- **Chrome**: `--cookies-from-browser chrome`
+- **Firefox**: `--cookies-from-browser firefox`
+- **Brave**: `--cookies-from-browser brave`
+- **Chromium**: `--cookies-from-browser chromium`
+- **Edge**: `--cookies-from-browser edge`
+
 > [!TIP]
-> If you are using a different browser or operating system, adjust the `--cookies-from-browser` flag accordingly:
-> - **Brave**: `--cookies-from-browser brave`
-> - **Firefox**: `--cookies-from-browser firefox`
-> - **Chromium**: `--cookies-from-browser chromium`
-> - **Edge**: `--cookies-from-browser edge`
+> **Linux & Keyring Note**:  
+> On Linux, Chromium-based browsers (Chrome, Brave, Chromium, Edge) encrypt stored cookies using the system keyring. It may be necessary to specify your keyring (e.g., `+gnomekeyring` or `+kwallet5`/`+kwallet6`) and profile path:
+> ```conf
+> --cookies-from-browser chrome+gnomekeyring:~/.config/google-chrome
+> # Or for Brave:
+> --cookies-from-browser brave+gnomekeyring:~/.config/BraveSoftware/Brave-Browser
+> ```
 
 ---
 
@@ -205,38 +237,6 @@ go install github.com/zyncc/ytmp/cmd/ytmp@latest
 | <kbd>a</kbd> | Duplicate and add song to play next |
 | <kbd>e</kbd> | Duplicate and enqueue song at end of queue |
 | <kbd>Esc</kbd> / <kbd>q</kbd> | Return to previous screen |
-
----
-
-## 🛰️ MPRIS & playerctl Integration
-
-`ytmp` exports standard **MPRIS v2.2** D-Bus interfaces under `org.mpris.MediaPlayer2.ytmp`. This allows complete external control using `playerctl`, media keys, and desktop notifications/widgets.
-
-### Common `playerctl` Commands
-
-```bash
-# Playback control
-playerctl -p ytmp play-pause
-playerctl -p ytmp play
-playerctl -p ytmp pause
-playerctl -p ytmp stop
-playerctl -p ytmp next
-playerctl -p ytmp previous
-
-# Seek and position
-playerctl -p ytmp position 30      # Jump to 30s
-playerctl -p ytmp position 10+     # Seek forward 10s
-playerctl -p ytmp position 10-     # Seek backward 10s
-
-# Volume & Loop control
-playerctl -p ytmp volume 0.8       # Set volume to 80%
-playerctl -p ytmp loop Track       # Enable single-track repeat
-playerctl -p ytmp loop None        # Disable repeat
-playerctl -p ytmp shuffle On       # Shuffle queue
-
-# Metadata extraction
-playerctl -p ytmp metadata --format "{{ artist }} - {{ title }} ({{ duration(position) }} / {{ duration(mpris:length) }})"
-```
 
 ---
 
