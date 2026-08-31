@@ -35,7 +35,7 @@
 
 ## 🖼️ Gallery
 
-![ytmp ui](https://github.com/user-attachments/assets/f4b4698d-7165-48f6-8cc0-389573820b64)
+![ytmp ui](https://github.com/user-attachments/assets/dea74d3a-0341-4278-a988-dfdc2b27c1dc)
 
 ---
 
