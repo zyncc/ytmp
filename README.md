@@ -254,7 +254,7 @@ go install github.com/zyncc/ytmp/cmd/ytmp@latest
 toggle_favorites = false
 
 [player]
-volume = 100
+default_volume = 100
 volume_increment_amount = 5
 
 [theme]
