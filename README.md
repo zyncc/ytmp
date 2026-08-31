@@ -33,6 +33,12 @@
 
 ---
 
+## 🖼️ Gallery
+
+![ytmp ui](https://github.com/user-attachments/assets/f4b4698d-7165-48f6-8cc0-389573820b64)
+
+---
+
 ## ✨ Features
 
 - **⚡ Gapless & Low-Latency Playback**  
@@ -254,7 +260,7 @@ go install github.com/zyncc/ytmp/cmd/ytmp@latest
 toggle_favorites = false
 
 [player]
-volume = 100
+default_volume = 100
 volume_increment_amount = 5
 
 [theme]
