@@ -22,7 +22,7 @@ func FetchAllPlaylists() ([]models.Playlist, error) {
 
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch playlists: %w", err)
+		return nil, fmt.Errorf("failed to fetch playlists: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 
 	var playlists models.PlaylistData
@@ -45,7 +45,7 @@ func FetchAllSongs(playlistID string) ([]models.Song, error) {
 
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("yt-dlp failed for %s: %w\n%s", url, err, output)
+		return nil, fmt.Errorf("yt-dlp failed for %s: %w: %s", url, err, strings.TrimSpace(string(output)))
 	}
 
 	var songs models.SongsData
@@ -68,7 +68,7 @@ func FetchSong(ctx context.Context, url string) (string, error) {
 
 	output, err := cmd.Output()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("yt-dlp failed for %s: %w: %s", url, err, strings.TrimSpace(string(output)))
 	}
 
 	return strings.TrimSpace(string(output)), nil

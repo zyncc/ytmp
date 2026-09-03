@@ -81,7 +81,6 @@ Before running **ytmp**, ensure the following tools are installed on your system
    # Debian / Ubuntu
    sudo apt install yt-dlp
 
-
    # Or via pip / pipx
    pipx install yt-dlp
    ```
@@ -98,49 +97,23 @@ mkdir -p ~/.config/yt-dlp
 nano ~/.config/yt-dlp/config
 ```
 
-Choose one of the two authentication methods below:
+### Export cookies from a private/incognito window (Recommended)
 
-### Option 1: Exported `cookies.txt` File (Recommended)
+YouTube rotates account cookies frequently on open YouTube browser tabs as a security measure. To export cookies that will remain working with `yt-dlp`, export them in a way that prevents them from being rotated.
 
-This is the most reliable method and avoids browser database locking or keyring decryption issues:
+Install [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbngbenkjcffliehddfacjne), then:
 
-1. Install a browser extension that exports cookies in Netscape format (e.g., [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbngbenkjcffliehddfacjne) for Chrome/Chromium or Firefox).
-2. Log in to [YouTube](https://www.youtube.com) and [YouTube Music](https://music.youtube.com).
-3. Export your cookies and save the file to `~/.config/yt-dlp/cookies.txt`.
-4. Update `~/.config/yt-dlp/config` to use the cookies file:
+1. Open a new private browsing/incognito window and log in to [YouTube](https://www.youtube.com).
+2. In that same window and tab, navigate to <https://www.youtube.com/robots.txt>. It should be the only private/incognito tab open.
+3. Export the `youtube.com` cookies with the extension, then close the private browsing/incognito window so that session is never opened in the browser again.
+4. Set `~/.config/yt-dlp/config` to point to the exported cookie file:
 
 ```conf
---cookies ~/.config/yt-dlp/cookies.txt
+--cookies /path-to-cookie.txt
 ```
 
 > [!IMPORTANT]
-> Keep your `cookies.txt` file secure and private, as it contains active session credentials.
-
----
-
-### Option 2: Direct Browser Extraction
-
-Alternatively, `yt-dlp` can attempt to automatically extract cookies directly from your installed browser:
-
-```conf
---cookies-from-browser chrome
-```
-
-**Supported browsers**:
-- **Chrome**: `--cookies-from-browser chrome`
-- **Firefox**: `--cookies-from-browser firefox`
-- **Brave**: `--cookies-from-browser brave`
-- **Chromium**: `--cookies-from-browser chromium`
-- **Edge**: `--cookies-from-browser edge`
-
-> [!TIP]
-> **Linux & Keyring Note**:  
-> On Linux, Chromium-based browsers (Chrome, Brave, Chromium, Edge) encrypt stored cookies using the system keyring. It may be necessary to specify your keyring (e.g., `+gnomekeyring` or `+kwallet5`/`+kwallet6`) and profile path:
-> ```conf
-> --cookies-from-browser chrome+gnomekeyring:~/.config/google-chrome
-> # Or for Brave:
-> --cookies-from-browser brave+gnomekeyring:~/.config/BraveSoftware/Brave-Browser
-> ```
+> Keep the exported cookie file secure and private, as it contains active session credentials.
 
 ---
 
@@ -280,9 +253,10 @@ error = "1"         # Error indicator
 - **Database**: Metadata is cached locally in SQLite at `~/.cache/ytmp/cache.db` with automated migrations.
 - **Logs**: Production runtime logs are written for diagnostics and debugging.
 
-To reset the database cache, simply remove the cache directory:
+To reset the database cache, run:
+
 ```bash
-rm -rf ~/.cache/ytmp
+ytmp delete cache
 ```
 
 ---

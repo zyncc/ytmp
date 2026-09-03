@@ -934,7 +934,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case UpdatePlaylistCache:
 		if msg.err != nil {
-			m.log.Fatal(
+			m.log.Error(
 				"failed to fetch playlists from YouTube",
 				zap.Error(msg.err),
 			)
