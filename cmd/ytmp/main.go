@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -15,6 +17,45 @@ import (
 )
 
 func main() {
+	if handled, err := runCommand(os.Args[1:]); handled {
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		return
+	}
+
+	runPlayer()
+}
+
+func runCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+
+	if len(args) != 2 || args[0] != "delete" || args[1] != "cache" {
+		return true, fmt.Errorf("usage: ytmp delete cache")
+	}
+
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return true, fmt.Errorf("get user cache directory: %w", err)
+	}
+
+	databasePath := cache.DatabasePath(filepath.Join(cacheDir, "ytmp"))
+	if err := os.Remove(databasePath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			fmt.Printf("cache database does not exist: %s\n", databasePath)
+			return true, nil
+		}
+		return true, fmt.Errorf("delete cache database: %w", err)
+	}
+
+	fmt.Printf("deleted cache database: %s\n", databasePath)
+	return true, nil
+}
+
+func runPlayer() {
 	log := logger.New("production")
 
 	cacheDir, err := os.UserCacheDir()
@@ -49,9 +90,22 @@ func main() {
 	if err != nil {
 		log.Fatal("failed to initialize mpv command", zap.Error(err))
 	}
-	defer mpvCmd.Process.Kill()
+	defer func() {
+		_ = mpvCmd.Process.Kill()
+		_ = mpvCmd.Wait()
+	}()
 
-	mpvClient, err := mpv.Connect("/tmp/ytmp")
+	sockPath, err := mpv.SocketPath()
+	if err != nil {
+		log.Fatal("failed to get mpv socket path", zap.Error(err))
+	}
+	defer func() {
+		if err := mpv.RemoveSocket(sockPath); err != nil {
+			log.Warn("failed to remove mpv socket", zap.Error(err))
+		}
+	}()
+
+	mpvClient, err := mpv.Connect(sockPath)
 	if err != nil {
 		log.Fatal("failed to connect to mpv sock", zap.Error(err))
 	}

@@ -7,8 +7,14 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+const databaseFilename = "cache.db"
+
+func DatabasePath(cacheDir string) string {
+	return filepath.Join(cacheDir, databaseFilename)
+}
+
 func OpenDatabase(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", filepath.Join(path, "cache.db"))
+	db, err := sql.Open("sqlite", DatabasePath(path))
 	if err != nil {
 		return nil, err
 
