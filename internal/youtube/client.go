@@ -62,6 +62,7 @@ func FetchSong(ctx context.Context, url string) (string, error) {
 		"yt-dlp",
 		"-4",
 		"-f", "ba",
+		"--extractor-args", "youtube:player_client=web_music;player_skip=configs",
 		"-g",
 		url,
 	)
