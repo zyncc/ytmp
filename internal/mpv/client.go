@@ -77,27 +77,15 @@ func (c *Client) Command(command ...any) error {
 }
 
 func (c *Client) PlaySong(url string) error {
-	if err := c.Command("loadfile", url, "replace"); err != nil {
-		return err
-	}
-
-	return nil
+	return c.Command("loadfile", url, "replace")
 }
 
 func (c *Client) TogglePause() error {
-	if err := c.Command("cycle", "pause"); err != nil {
-		return err
-	}
-
-	return nil
+	return c.Command("cycle", "pause")
 }
 
 func (c *Client) Seek(seconds int) error {
-	if err := c.Command("seek", seconds, "relative"); err != nil {
-		return err
-	}
-
-	return nil
+	return c.Command("seek", seconds, "relative")
 }
 
 func (c *Client) SetVolume(volume int) error {
